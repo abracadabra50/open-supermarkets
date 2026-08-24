@@ -16,7 +16,7 @@ is a reason to re-probe, not a reason to stop.
 | Loblaws / PC Express | CA | blocked | HTTP 403 "Access Denied" on api.pcexpress.ca |
 | Target | US | blocked | RedSky now answers 403 + CAPTCHA challenge |
 | Walmart | US | blocked | consumer GraphQL returns HTTP 418 (bot detection) |
-| Tesco Ireland | IE | needs work | not a header switch; xapi rejects with "Invalid Client" |
+| ~~Tesco Ireland~~ | IE | **BUILT** | separate Ireland provider with current public client evidence |
 | ~~Mercadona~~ | ES | **BUILT** | Algolia key found in the frontend bundle — see src/providers/mercadona.ts |
 
 ---
@@ -149,10 +149,11 @@ possible addition; it is not reachable.
 returns HTTP 403 "Access Denied" (Akamai-style HTML). Canada is currently covered only
 by Instacart, which is itself gated.
 
-**Tesco Ireland (IE)** — not the free win Albert Heijn Belgium was. AH switches
-storefront on a request header; Tesco's `xapi.tesco.com` answers `Forbidden: Invalid
-Client`, so the IE storefront uses different client credentials that would have to be
-captured separately. Possible, but it is an investigation rather than a manifest entry.
+**Tesco Ireland (IE)** — the 2026-08-09 probe correctly showed that Ireland was not a
+header switch on the GB provider. That blocker is now resolved by the separate
+`tesco-ie` provider. It uses the current public Ireland client evidence, keeps Irish
+product identity separate, and declares search only. A rejected or rotated public key
+still fails with an explicit action instead of falling back to an unsafe transport.
 
 ### Mercadona (ES) — the one genuinely worth picking up
 

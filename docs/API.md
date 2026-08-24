@@ -1,43 +1,51 @@
 # API Documentation
 
-Complete reference for the UK Grocery CLI provider interface and implementation.
+Reference for the multi-country supermarket provider interface and implementation.
 
 ---
 
 ## Provider Interface
 
-All grocery providers implement the `GroceryProvider` interface:
+Every provider implements `name` and `search`. Other methods are optional and
+must match the capabilities declared in the provider registry.
 
 ```typescript
 interface GroceryProvider {
   readonly name: string;
   
-  // Authentication
-  login(email: string, password: string): Promise<void>;
-  logout(): Promise<void>;
-  isAuthenticated(): Promise<boolean>;
-  
-  // Product search
+  // Product search (required)
   search(query: string, options?: SearchOptions): Promise<Product[]>;
-  getProduct(productId: string): Promise<Product>;
-  getCategories(): Promise<any>;
+  getProduct?(productId: string): Promise<Product>;
+  getCategories?(): Promise<any>;
+
+  // Store-scoped catalogue operations
+  listStores?(options?: StoreSearchOptions): Promise<Store[]>;
+  selectStore?(storeId: string): Promise<void>;
+
+  // Authentication
+  login?(email: string, password: string): Promise<void>;
+  logout?(): Promise<void>;
+  isAuthenticated?(): Promise<boolean>;
   
   // Basket operations
-  getBasket(): Promise<Basket>;
-  addToBasket(productId: string, quantity: number): Promise<void>;
-  updateBasketItem(itemId: string, quantity: number): Promise<void>;
-  removeFromBasket(itemId: string): Promise<void>;
-  clearBasket(): Promise<void>;
+  getBasket?(): Promise<Basket>;
+  addToBasket?(productId: string, quantity: number): Promise<void>;
+  updateBasketItem?(itemId: string, quantity: number): Promise<void>;
+  removeFromBasket?(itemId: string): Promise<void>;
+  clearBasket?(): Promise<void>;
   
   // Delivery & checkout
-  getDeliverySlots(): Promise<DeliverySlot[]>;
-  bookSlot(slotId: string): Promise<void>;
-  checkout(): Promise<Order>;
+  getDeliverySlots?(): Promise<DeliverySlot[]>;
+  bookSlot?(slotId: string): Promise<void>;
+  checkout?(dryRun?: boolean): Promise<Order>;
   
   // Orders
-  getOrders(): Promise<Order[]>;
+  getOrders?(): Promise<Order[]>;
 }
 ```
+
+Use `assertCapability(providerId, capability)` before calling an optional
+capability method. The CLI, HTTP server and MCP server already do this.
 
 ---
 
@@ -51,13 +59,13 @@ interface Product {
   name: string;             // Product name
   description?: string;     // Product description
   retail_price: {
-    price: number;          // Retail price in GBP
+    price: number;          // Retail price in the provider currency
   };
   unit_price?: {
     measure: string;        // Unit (L, kg, etc.)
     price: number;          // Price per unit
   };
-  in_stock: boolean;        // Availability
+  in_stock: boolean | null; // Explicit stock, or null when the retailer does not say
   image_url?: string;       // Product image
   provider: string;         // Provider name (sainsburys, ocado)
 }
@@ -117,6 +125,36 @@ interface SearchOptions {
   category?: string;        // Filter by category
 }
 ```
+
+### Store and StoreSearchOptions
+
+```typescript
+interface Store {
+  store_id: string;        // Retailer-owned ID used for catalogue search
+  name: string;
+  status?: string;
+  currency?: string;
+  postcode?: string;
+  address?: string;
+  location?: { latitude: number; longitude: number };
+  shopping_modes?: string[];
+}
+
+interface StoreSearchOptions {
+  limit?: number;
+  offset?: number;
+  retailerStoreId?: string;
+  latitude?: number;
+  longitude?: number;
+  range?: number;          // Kilometres
+  shoppingMode?: 'pickup' | 'delivery';
+  fullTextSearch?: string;
+  postcode?: string;
+}
+```
+
+Store-capable providers expose `listStores()` and `selectStore()`. Select a
+store before searching when local price and availability depend on it.
 
 ---
 
@@ -390,9 +428,11 @@ if (products.length === 0) {
 ```typescript
 const product = await provider.getProduct('357937');
 
-if (!product.in_stock) {
+if (product.in_stock === false) {
   console.log('Product out of stock');
   // Find alternative
+} else if (product.in_stock === null) {
+  console.log('Retailer did not provide a stock signal');
 }
 ```
 

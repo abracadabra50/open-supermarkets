@@ -4,20 +4,20 @@
 
 ### One command line for the world's supermarkets
 
-**Search real products at real prices, build a basket, book a slot, check out —<br>across nine providers in six countries. Built for AI agents.**
+**Search real products at real prices, build a basket, book a slot, check out —<br>across 15 providers in seven countries. Built for AI agents.**
 
 <br>
 
 [![npm](https://img.shields.io/npm/v/open-supermarkets?color=CB3837&logo=npm&logoColor=white)](https://www.npmjs.com/package/open-supermarkets)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
-[![Countries](https://img.shields.io/badge/countries-6-2ea44f)](#what-works-where)
-[![Providers](https://img.shields.io/badge/providers-9-2ea44f)](#what-works-where)
-[![No credentials](https://img.shields.io/badge/3%20of%206%20countries-no%20credentials-orange)](#what-works-where)
+[![Countries](https://img.shields.io/badge/countries-7-2ea44f)](#what-works-where)
+[![Providers](https://img.shields.io/badge/providers-15-2ea44f)](#what-works-where)
+[![No account](https://img.shields.io/badge/4%20of%207%20countries-no%20user%20account-orange)](#what-works-where)
 [![CI](https://github.com/abracadabra50/open-supermarkets/actions/workflows/ci.yml/badge.svg)](https://github.com/abracadabra50/open-supermarkets/actions/workflows/ci.yml)
-[![MCP](https://img.shields.io/badge/MCP-22%20tools-6E56CF)](#three-ways-to-drive-it)
+[![MCP](https://img.shields.io/badge/MCP-23%20tools-6E56CF)](#three-ways-to-drive-it)
 [![Stars](https://img.shields.io/github/stars/abracadabra50/open-supermarkets?style=flat&color=yellow)](https://github.com/abracadabra50/open-supermarkets/stargazers)
 
-🇬🇧 &nbsp;🇳🇱 &nbsp;🇧🇪 &nbsp;🇪🇸 &nbsp;🇺🇸 &nbsp;🇨🇦 &nbsp;&nbsp;·&nbsp;&nbsp; [**your country next?**](#we-want-your-supermarket)
+🇬🇧 &nbsp;🇮🇪 &nbsp;🇳🇱 &nbsp;🇧🇪 &nbsp;🇪🇸 &nbsp;🇺🇸 &nbsp;🇨🇦 &nbsp;&nbsp;·&nbsp;&nbsp; [**your country next?**](#we-want-your-supermarket)
 
 </div>
 
@@ -36,8 +36,10 @@ $ supermarket search melk --country NL
   Campina Halfvolle melk           €1.89 / 1,5 l
 ```
 
-**Three of the six countries need no credentials at all.** No key, no account, no
-signup — Spain, the Netherlands and Belgium answer an anonymous request.
+**Four of the seven countries need no user account.** Spain, the Netherlands and
+Belgium answer anonymously. Ireland also needs no login, although Tesco Ireland
+sends the public web API key used by its storefront and may need an environment
+override if that key rotates.
 
 ---
 
@@ -78,20 +80,37 @@ package ships its own `groc` binary and the two can't share a PATH.
 Providers declare what they can do. Search needs no account almost anywhere; checkout
 needs an account, an address and a card, so it exists for fewer.
 
-| Provider | Country | Search | Basket | Slots | Checkout | Auth |
-|---|---|:-:|:-:|:-:|:-:|---|
-| Tesco | 🇬🇧 | ✓ | ✓ | ✓ | ✓ | browser session |
-| Sainsbury's | 🇬🇧 | ✓ | ✓ | ✓ | ✓ | email + password |
-| Ocado | 🇬🇧 | ✓ | ✓ | read-only | — | email + password |
-| Albert Heijn | 🇳🇱 | ✓ | — | — | — | **none** |
-| Albert Heijn België | 🇧🇪 | ✓ | — | — | — | **none** |
-| Mercadona | 🇪🇸 | ✓ | — | — | — | **none** |
-| Kroger *+ Ralphs, Fred Meyer, King Soopers, Harris Teeter, QFC* | 🇺🇸 | ✓ | — | — | — | free API key |
-| Instacart | 🇺🇸 🇨🇦 | ✓ | ✓ | — | via link | partner key |
-| Instacart *(unofficial)* | 🇺🇸 🇨🇦 | ✓ | ✓ | — | — | browser session |
+| Provider | Country | Search | Stores | Basket | Slots | Checkout | Auth |
+|---|---|:-:|:-:|:-:|:-:|:-:|---|
+| Tesco | 🇬🇧 | ✓ | — | ✓ | ✓ | ✓ | browser session |
+| Sainsbury's | 🇬🇧 | ✓ | — | ✓ | ✓ | ✓ | email + password |
+| Ocado | 🇬🇧 | ✓ | — | ✓ | read-only | — | email + password |
+| Tesco Ireland | 🇮🇪 | ✓ | — | — | — | — | public API key |
+| Aldi Ireland | 🇮🇪 | ✓ | ✓ | — | — | — | **none** |
+| Lidl Ireland | 🇮🇪 | ✓ | — | — | — | — | **none** |
+| Mr Price Ireland | 🇮🇪 | ✓ | — | — | — | — | **none** |
+| Dunnes Stores Ireland | 🇮🇪 | ✓ | ✓ | — | — | — | **none** |
+| SuperValu Ireland | 🇮🇪 | ✓ | ✓ | — | — | — | **none** |
+| Albert Heijn | 🇳🇱 | ✓ | — | — | — | — | **none** |
+| Albert Heijn België | 🇧🇪 | ✓ | — | — | — | — | **none** |
+| Mercadona | 🇪🇸 | ✓ | — | — | — | — | **none** |
+| Kroger *+ Ralphs, Fred Meyer, King Soopers, Harris Teeter, QFC* | 🇺🇸 | ✓ | — | — | — | — | free API key |
+| Instacart | 🇺🇸 🇨🇦 | ✓ | — | ✓ | — | via link | partner key |
+| Instacart *(unofficial)* | 🇺🇸 🇨🇦 | ✓ | — | ✓ | — | — | browser session |
 
 `supermarket providers` prints this live from the registry, so it can't drift from
 reality the way a hand-maintained table does.
+
+Aldi, Dunnes and SuperValu prices are store-scoped. Find a store, then pass its
+retailer ID to search:
+
+```bash
+supermarket --provider aldi-ie stores --query Dublin --json
+supermarket --provider aldi-ie --store-id D001 search milk --json
+```
+
+The HTTP API exposes the same flow through `GET /stores` and `store_id` on
+`GET /search`. MCP clients use `grocery_stores` and `store_id`.
 
 Ocado's slot *booking* and checkout are blocked by AWS WAF. Reading slots works;
 committing to one doesn't. The manifest doesn't claim the capability — which is why
@@ -120,6 +139,7 @@ supermarket search "olive oil" --country ES --limit 5 --json
 |---|---|
 | `grocery_search` · `grocery_compare` | Find and compare products |
 | **`grocery_search_batch`** · **`grocery_basket_add_batch`** | **Many at once — prefer these** |
+| `grocery_stores` | Find a store before store-scoped search |
 | `grocery_basket_*` | View, add, remove, update, clear |
 | `grocery_slots` · `grocery_book_slot` | Delivery slots |
 | `grocery_checkout` | Place the order — `dry_run` defaults to **true** |
@@ -243,7 +263,7 @@ Never rely on it for an allergy. Read the packet.
 
 ## We want your supermarket
 
-**This is the part we'd most like help with.** Nine providers, five countries — and
+**This is the part we'd most like help with.** 15 providers, seven countries — and
 there are a lot more countries. If you shop somewhere that isn't here, you are better
 placed to add it than anyone else, because you can actually test it.
 
@@ -280,8 +300,8 @@ for anything non-obvious about your provider is welcome but not required.
 **Read [`docs/providers/evaluated.md`](docs/providers/evaluated.md) first** so you don't
 lose a weekend. It records what's already been probed and exactly why it failed: REWE
 needs mTLS certificates extracted from its APK, Jumbo refuses the TLS handshake,
-DoorDash and Woolworths serve bot challenges, Loblaws returns 403, Tesco Ireland uses
-separate client credentials. Rejections are dated — an old "no" is a reason to re-probe,
+DoorDash and Woolworths serve bot challenges, and Loblaws returns 403. Tesco Ireland's
+older client error is recorded as resolved. Rejections are dated — an old "no" is a reason to re-probe,
 not to stop.
 
 ### The rules that stop this rotting
