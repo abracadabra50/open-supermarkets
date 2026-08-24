@@ -1,0 +1,34 @@
+{
+  "data": {
+    "productSearch": {
+      "products": [
+        {
+          "productId": "dunnes-product-1",
+          "productReference": "REF-4001",
+          "productName": "Dunnes Stores Fresh Milk 2L",
+          "items": [
+            {
+              "itemId": "SKU-4001",
+              "images": [ { "imageUrl": "https://img.example.test/dunnes-milk.jpg" } ],
+              "sellers": [
+                { "commertialOffer": { "Price": 2.45, "ListPrice": 2.69, "AvailableQuantity": 10 } }
+              ]
+            }
+          ]
+        },
+        {
+          "productId": "dunnes-product-2",
+          "productName": "Unavailable Milk",
+          "items": [
+            {
+              "itemId": "SKU-4002",
+              "sellers": [
+                { "commertialOffer": { "Price": 1.0, "AvailableQuantity": 0 } }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "TOTAL": 1,
+  "ITEMS": [
+    {
+      "RetailerStoreID": "258",
+      "NAME": "Beacon Court",
+      "STATUS": "ACTIVE",
+      "Currency": "eur",
+      "POSTCODE": "d18 pt97",
+      "ADDRESSLINE1": "Unit C2-C5",
+      "addressLine2": "The Courtyard, Beacon South Quarter",
+      "City": "Dublin 18",
+      "COUNTRY": "Ireland",
+      "LOCATION": { "LATITUDE": "53.2777612", "longitude": "-6.2160268" },
+      "SHOPPINGMODES": ["Pickup", "DELIVERY", "pickup"]
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "items": [
+    {
+      "id": "SV-6001",
+      "name": "SuperValu Whole Milk 2L",
+      "priceNumeric": "€2.55",
+      "pricePerUnit": "€1.28/1 L",
+      "available": true,
+      "imageUrl": "https://img.example.test/sv-milk.jpg",
+      "packSize": "2 L",
+      "promotions": [ { "description": "2 for €4.50" } ]
+    }
+  ]
+}

@@ -55,6 +55,78 @@ export const PROVIDERS: ProviderManifest[] = [
     load: async () => (await import('./tesco/index')).TescoProvider,
   },
 
+  // ── Ireland ──────────────────────────────────────────────────────────
+  {
+    id: 'tesco-ie',
+    label: 'Tesco Ireland',
+    country: 'IE',
+    capabilities: ['search'],
+    auth: 'api-key',
+    tier: 'community',
+    maintainer: 'c-mongan',
+    credit:
+      'Protocol cross-checked against basketeer and grocery-cli (MIT), plus independently reimplemented Irish market evidence',
+    load: async () => (await import('./tesco-ie')).TescoIrelandProvider,
+  },
+  {
+    id: 'aldi-ie',
+    label: 'Aldi Ireland',
+    country: 'IE',
+    capabilities: ['search', 'stores'],
+    auth: 'none',
+    tier: 'community',
+    maintainer: 'c-mongan',
+    credit:
+      'Protocol reimplemented from AviBackToBlack/lidaldi and but3k4/supermarket-mcp (MIT)',
+    load: async () => (await import('./aldi-ie')).AldiIrelandProvider,
+  },
+  {
+    id: 'lidl-ie',
+    label: 'Lidl Ireland',
+    country: 'IE',
+    capabilities: ['search'],
+    auth: 'none',
+    tier: 'community',
+    maintainer: 'c-mongan',
+    credit: 'Protocol reimplemented from AviBackToBlack/lidaldi (MIT)',
+    load: async () => (await import('./lidl-ie')).LidlIrelandProvider,
+  },
+  {
+    id: 'mrprice-ie',
+    label: 'Mr Price Ireland',
+    country: 'IE',
+    capabilities: ['search'],
+    auth: 'none',
+    tier: 'community',
+    maintainer: 'c-mongan',
+    credit: 'Protocol reimplemented from but3k4/supermarket-mcp (MIT)',
+    load: async () => (await import('./mrprice-ie')).MrPriceIrelandProvider,
+  },
+  {
+    id: 'dunnes-ie',
+    label: 'Dunnes Stores Ireland',
+    country: 'IE',
+    capabilities: ['search', 'stores'],
+    auth: 'none',
+    tier: 'community',
+    maintainer: 'c-mongan',
+    credit:
+      'Protocol reimplemented from but3k4/supermarket-mcp (MIT) and independently cross-checked Irish gateway evidence',
+    load: async () => (await import('./dunnes-ie')).DunnesIrelandProvider,
+  },
+  {
+    id: 'supervalu-ie',
+    label: 'SuperValu Ireland',
+    country: 'IE',
+    capabilities: ['search', 'stores'],
+    auth: 'none',
+    tier: 'community',
+    maintainer: 'c-mongan',
+    credit:
+      'Protocol reimplemented from but3k4/supermarket-mcp (MIT) and independently cross-checked Irish store gateway evidence',
+    load: async () => (await import('./supervalu-ie')).SuperValuIrelandProvider,
+  },
+
   // ── Netherlands ──────────────────────────────────────────────────────
   {
     id: 'ah',

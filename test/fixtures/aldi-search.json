@@ -1,0 +1,32 @@
+{
+  "data": [
+    {
+      "sku": "aldi-1001",
+      "brandName": "Clonbawn",
+      "name": "Fresh Irish Milk",
+      "sellingSize": "2 L",
+      "urlSlugText": "clonbawn-fresh-irish-milk",
+      "price": {
+        "amountRelevant": 139,
+        "amountRelevantDisplay": "€1.39",
+        "comparisonDisplay": "€1.20/1 L"
+      },
+      "assets": [
+        { "url": "https://dm.example.test/{width}/{slug}.jpg" }
+      ],
+      "available": true
+    },
+    {
+      "sku": "aldi-1002",
+      "brandName": "Brooklea",
+      "name": "Protein Yogurt",
+      "sellingSize": "200 g",
+      "urlSlugText": "brooklea-protein-yogurt",
+      "price": {
+        "amountRelevantDisplay": "€1.09",
+        "comparisonDisplay": "€5.45/1 kg"
+      },
+      "notForSale": true
+    }
+  ]
+}

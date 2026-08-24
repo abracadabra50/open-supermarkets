@@ -1,4 +1,4 @@
-import { FullGroceryProvider } from './types';
+import { FullGroceryProvider, GroceryProvider } from './types';
 import { createProvider, getManifest, list, PROVIDERS } from './registry';
 
 export * from './types';
@@ -10,10 +10,11 @@ export * from './registry';
  * and throws with the available list.
  */
 export type ProviderName = string;
+type LegacyFullProviderName = 'sainsburys' | 'ocado' | 'tesco';
 
 /**
  * Legacy synchronous factory, kept so existing callers and the MCP server keep
- * working. It eagerly requires the UK providers.
+ * working. It eagerly requires the selected provider module.
  *
  * Prefer `createProvider()` from the registry: it loads one provider on demand
  * instead of all of them, which is the whole point of the manifest.
@@ -21,7 +22,9 @@ export type ProviderName = string;
  * @deprecated use `createProvider()`
  */
 export class ProviderFactory {
-  static create(name: ProviderName): FullGroceryProvider {
+  static create(name: LegacyFullProviderName): FullGroceryProvider;
+  static create(name: ProviderName): GroceryProvider;
+  static create(name: ProviderName): GroceryProvider {
     getManifest(name); // throws with a helpful message for unknown ids
     switch (name) {
       case 'sainsburys':
@@ -30,6 +33,18 @@ export class ProviderFactory {
         return new (require('./ocado').OcadoProvider)();
       case 'tesco':
         return new (require('./tesco/index').TescoProvider)();
+      case 'tesco-ie':
+        return new (require('./tesco-ie').TescoIrelandProvider)();
+      case 'aldi-ie':
+        return new (require('./aldi-ie').AldiIrelandProvider)();
+      case 'lidl-ie':
+        return new (require('./lidl-ie').LidlIrelandProvider)();
+      case 'mrprice-ie':
+        return new (require('./mrprice-ie').MrPriceIrelandProvider)();
+      case 'dunnes-ie':
+        return new (require('./dunnes-ie').DunnesIrelandProvider)();
+      case 'supervalu-ie':
+        return new (require('./supervalu-ie').SuperValuIrelandProvider)();
       case 'ah':
         return new (require('./ah').AlbertHeijnProvider)();
       case 'ah-be':
@@ -57,7 +72,7 @@ export class ProviderFactory {
   }
 
   static createAll(): FullGroceryProvider[] {
-    return list({ country: 'GB' }).map((p) => this.create(p.id));
+    return list({ country: 'GB' }).map((p) => this.create(p.id) as FullGroceryProvider);
   }
 }
 

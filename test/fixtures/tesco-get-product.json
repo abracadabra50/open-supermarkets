@@ -1,0 +1,20 @@
+[
+  {
+    "data": {
+      "product": {
+        "id": "7201001",
+        "title": "Tesco Whole Milk 1L",
+        "isForSale": true,
+        "sellers": {
+          "results": [
+            {
+              "price": { "actual": 1.35, "unitPrice": 1.35, "unitOfMeasure": "litre" },
+              "promotions": []
+            }
+          ]
+        },
+        "details": { "packSize": { "value": 1, "units": "L" } }
+      }
+    }
+  }
+]

@@ -42,7 +42,8 @@ export interface LeanProduct {
   currency: string;
   size?: string;
   unit?: string;
-  inStock: boolean;
+  /** `null` means the retailer did not expose a product-level stock signal. */
+  inStock: boolean | null;
 }
 
 export function lean(p: Product): LeanProduct {

@@ -1,0 +1,13 @@
+{
+  "items": [
+    {
+      "sku": "DG-5001",
+      "name": "Fresh Milk 2L",
+      "priceNumeric": 2.49,
+      "pricePerUnit": "€1.25/L",
+      "available": true,
+      "imageUrl": "https://img.example.test/dg-milk.jpg",
+      "size": "2 L"
+    }
+  ]
+}

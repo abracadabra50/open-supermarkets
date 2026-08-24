@@ -1,0 +1,7 @@
+[
+  {
+    "errors": [
+      { "message": "Cannot query field 'search' on type 'Query'." }
+    ]
+  }
+]

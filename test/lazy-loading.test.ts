@@ -14,7 +14,27 @@
 
 import assert from 'node:assert';
 
-const PROVIDER_MODULE = /providers[/\\](sainsburys|ocado|tesco|ah|instacart)/;
+const PROVIDER_MODULE =
+  /providers[/\\](?:sainsburys|ocado|ah|instacart)(?:[/\\]|\.|$)|providers[/\\]tesco(?:[/\\]|\.|$)|providers[/\\](?:aldi|dunnes|lidl|mrprice|supervalu|tesco)-ie(?:[/\\]|\.|$)|providers[/\\]ie[/\\]shared(?:[/\\]|\.|$)/;
+const IRELAND_PROVIDER_IDS = [
+  'aldi-ie',
+  'dunnes-ie',
+  'lidl-ie',
+  'mrprice-ie',
+  'supervalu-ie',
+  'tesco-ie',
+];
+const IRELAND_STORE_PROVIDER_IDS = ['aldi-ie', 'dunnes-ie', 'supervalu-ie'];
+
+// Compile-time contract: dynamic and search-only providers expose only the
+// capability-based interface, while the three legacy GB literals stay full.
+const typedFactory = null as unknown as typeof import('../src/providers').ProviderFactory;
+if (false) {
+  const irelandProvider = typedFactory.create('aldi-ie');
+  // @ts-expect-error Aldi Ireland does not implement basket operations.
+  irelandProvider.getBasket();
+  typedFactory.create('tesco').getBasket();
+}
 
 function loadedProviderModules(): string[] {
   return Object.keys(require.cache).filter((p) => PROVIDER_MODULE.test(p));
@@ -62,6 +82,46 @@ check('country filter excludes other countries', () => {
   assert.deepStrictEqual(gb, ['ocado', 'sainsburys', 'tesco']);
   const nl = registry.list({ country: 'NL' }).map((p: any) => p.id);
   assert.deepStrictEqual(nl, ['ah']);
+  const ie = registry.list({ country: 'IE' }).map((p: any) => p.id).sort();
+  assert.deepStrictEqual(ie, IRELAND_PROVIDER_IDS);
+  assert.deepStrictEqual(loadedProviderModules(), []);
+});
+
+check('Ireland manifests declare search and store capabilities exactly', () => {
+  const ireland = registry.list({ country: 'IE' }).sort((a: any, b: any) =>
+    a.id.localeCompare(b.id)
+  );
+  assert.deepStrictEqual(
+    ireland.map((p: any) => p.id),
+    IRELAND_PROVIDER_IDS
+  );
+  for (const manifest of ireland) {
+    const expectedCapabilities = IRELAND_STORE_PROVIDER_IDS.includes(manifest.id)
+      ? ['search', 'stores']
+      : ['search'];
+    assert.deepStrictEqual(manifest.capabilities, expectedCapabilities);
+    assert.strictEqual(manifest.tier, 'community');
+    assert.strictEqual(manifest.maintainer, 'c-mongan');
+    assert.ok(manifest.credit, `${manifest.id} must preserve protocol credit`);
+  }
+  assert.strictEqual(registry.getManifest('tesco-ie').auth, 'api-key');
+  for (const id of IRELAND_PROVIDER_IDS.filter((value) => value !== 'tesco-ie')) {
+    assert.strictEqual(registry.getManifest(id).auth, 'none');
+  }
+  assert.deepStrictEqual(
+    registry.list({ country: 'IE', capability: 'search' }).map((p: any) => p.id).sort(),
+    IRELAND_PROVIDER_IDS
+  );
+  assert.deepStrictEqual(
+    registry.list({ country: 'IE', capability: 'stores' }).map((p: any) => p.id).sort(),
+    IRELAND_STORE_PROVIDER_IDS
+  );
+  for (const id of IRELAND_STORE_PROVIDER_IDS) {
+    assert.ok(registry.supports(id, 'stores'));
+  }
+  for (const id of IRELAND_PROVIDER_IDS.filter((value) => !IRELAND_STORE_PROVIDER_IDS.includes(value))) {
+    assert.ok(!registry.supports(id, 'stores'));
+  }
   assert.deepStrictEqual(loadedProviderModules(), []);
 });
 
@@ -118,6 +178,24 @@ check('creating one provider loads exactly that provider', () => {
   const loaded = loadedProviderModules();
   assert.strictEqual(loaded.length, 1, `expected 1 module, got ${loaded.length}: ${loaded}`);
   assert.match(loaded[0], /providers[/\\]ah/);
+});
+
+check('creating each Ireland provider loads only that provider implementation', () => {
+  const { ProviderFactory } = require('../src/providers');
+  const implementation = (id: string) =>
+    new RegExp(`providers[/\\\\]${id}(?:[/\\\\]|\\.|$)`);
+  const loadedImplementations = () =>
+    loadedProviderModules().filter((path) => !/providers[/\\]ie[/\\]shared/.test(path));
+
+  for (const id of IRELAND_PROVIDER_IDS) {
+    const before = new Set(loadedImplementations());
+    const provider = ProviderFactory.create(id);
+    assert.strictEqual(provider.name, id);
+    assert.strictEqual(typeof provider.search, 'function');
+    const newlyLoaded = loadedImplementations().filter((path) => !before.has(path));
+    assert.strictEqual(newlyLoaded.length, 1, `${id} loaded unexpected modules: ${newlyLoaded}`);
+    assert.match(newlyLoaded[0], implementation(id));
+  }
 });
 
 // ─────────────────────────────────────────────────────────────────────
