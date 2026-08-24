@@ -154,6 +154,9 @@ anything that reads `SKILL.md`.
 There's also `supermarket-api`, a plain HTTP server, for agents with network access but
 no filesystem.
 
+See [`docs/API.md`](docs/API.md) for the provider contract and
+[`API-REFERENCE.md`](API-REFERENCE.md) for the legacy Sainsbury's endpoint record.
+
 ---
 
 ## Batch mode — built for how agents actually work
@@ -303,6 +306,9 @@ needs mTLS certificates extracted from its APK, Jumbo refuses the TLS handshake,
 DoorDash and Woolworths serve bot challenges, and Loblaws returns 403. Tesco Ireland's
 older client error is recorded as resolved. Rejections are dated — an old "no" is a reason to re-probe,
 not to stop.
+
+Agent integration examples are in [`AGENTS.md`](AGENTS.md), and the current provider
+contract is in [`docs/API.md`](docs/API.md).
 
 ### The rules that stop this rotting
 

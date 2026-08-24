@@ -494,7 +494,7 @@ Health optimized: All high-risk items are organic"
 Add this to your agent's skill directory:
 
 ```bash
-cp docs/SMART-SHOPPING.md /path/to/agent/skills/uk-grocery-cli/
+cp docs/SMART-SHOPPING.md /path/to/agent/skills/open-supermarkets/
 ```
 
 Your agent can reference this guide when making shopping decisions.
