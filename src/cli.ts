@@ -8,8 +8,9 @@ import {
   countries as knownCountries,
   providersFor,
   createProvider,
+  assertCapability,
 } from './providers/registry';
-import type { Capability } from './providers/types';
+import type { Capability, GroceryProvider } from './providers/types';
 import { money } from './format';
 import { explain } from './errors';
 // Tesco is imported as a *type only* — a value import here would pull Playwright
@@ -36,7 +37,8 @@ program
   .name(invokedAs.startsWith('groc') ? invokedAs : 'supermarket')
   .description("One command line for the world's supermarkets. Built for agents.")
   .version('3.0.0')
-  .option('-p, --provider <name>', 'Provider id (see `supermarket providers`)', 'sainsburys');
+  .option('-p, --provider <name>', 'Provider id (see `supermarket providers`)', 'sainsburys')
+  .option('--store-id <id>', 'Retailer store id for local pricing and availability');
 
 // Parse a string as a positive integer, or throw
 function parsePositiveInt(value: string, name: string): number {
@@ -47,16 +49,64 @@ function parsePositiveInt(value: string, name: string): number {
   return n;
 }
 
-// Helper to get provider from options
-function getProvider(options: any) {
+function parseFiniteNumber(value: string, name: string): number {
+  const n = Number(value);
+  if (!Number.isFinite(n)) {
+    throw new Error(`${name} must be a number, got "${value}"`);
+  }
+  return n;
+}
+
+function parsePositiveNumber(value: string, name: string): number {
+  const n = parseFiniteNumber(value, name);
+  if (n <= 0) {
+    throw new Error(`${name} must be a positive number, got "${value}"`);
+  }
+  return n;
+}
+
+// Commander keeps the source of every option value. Checking this is important:
+// `--country` is a selector only when the user did not explicitly choose a
+// provider. Looking at `cmd.args` is wrong because options are not positional
+// arguments and Commander removes them before the action runs.
+function providerWasExplicitlySelected(command: any): boolean {
+  return command?.getOptionValueSourceWithGlobals?.('provider') === 'cli';
+}
+
+function requireProviderMethod<T extends object, K extends keyof T>(
+  provider: T,
+  method: K,
+  action: string
+): asserts provider is T & Required<Pick<T, K>> {
+  if (typeof provider[method] !== 'function') {
+    throw new Error(`Provider "${(provider as any).name}" does not support ${action}`);
+  }
+}
+
+async function selectStoreIfRequested(provider: any, command: any): Promise<void> {
+  const storeId = command?.optsWithGlobals?.().storeId;
+  if (storeId === undefined) return;
+  if (typeof storeId !== 'string' || storeId.trim() === '') {
+    throw new Error('--store-id must be a non-empty string');
+  }
+  assertCapability(provider.name, 'stores');
+  requireProviderMethod(provider, 'selectStore', 'store selection');
+  await provider.selectStore(storeId);
+}
+
+// Helper to get a provider and enforce the capability declared in its manifest.
+// This check happens before loading or calling an optional method, so a
+// search-only provider fails with an actionable message instead of TypeError.
+function getProvider(options: any, capability?: Capability): GroceryProvider {
   const providerName = options.provider || program.opts().provider;
+  if (capability) assertCapability(providerName, capability);
   return ProviderFactory.create(providerName as ProviderName);
 }
 
 
 function printProducts(products: any[]) {
   products.forEach((p, i) => {
-    const stock = p.in_stock ? '✅' : '❌';
+    const stock = p.in_stock === true ? '✅ In stock' : p.in_stock === false ? '❌ Out of stock' : '❔ Availability unknown';
     const rating = p.rating ? ` ${p.rating}★ (${p.review_count ?? 0})` : '';
     const size = p.size ? ` / ${p.size}` : '';
     const unit = p.unit_price?.price
@@ -65,6 +115,17 @@ function printProducts(products: any[]) {
     console.log(`${i + 1}. ${p.name}${rating}`);
     console.log(`   ${money(p.retail_price.price, p.currency)}${size}${unit} ${stock}`);
     console.log(`   ID: ${p.product_uid}\n`);
+  });
+}
+
+function printStores(stores: any[]): void {
+  stores.forEach((store) => {
+    console.log(`${store.store_id}  ${store.name}`);
+    console.log(`   Address: ${store.address || 'unknown'}`);
+    console.log(`   Postcode: ${store.postcode || 'unknown'}`);
+    console.log(`   Modes: ${Array.isArray(store.shopping_modes) && store.shopping_modes.length
+      ? store.shopping_modes.join(', ')
+      : 'unknown'}\n`);
   });
 }
 
@@ -86,6 +147,7 @@ program
         process.exit(1);
       }
       const provider = getProvider(cmd.optsWithGlobals());
+      requireProviderMethod(provider, 'login', 'login');
       await provider.login(email, password);
       console.log(`✅ Logged in to ${provider.name}`);
     } catch (error: any) {
@@ -101,6 +163,7 @@ program
   .action(async (options, cmd) => {
     try {
       const provider = getProvider(cmd.optsWithGlobals());
+      requireProviderMethod(provider, 'logout', 'logout');
       await provider.logout();
       console.log(`✅ Logged out from ${provider.name}`);
     } catch (error: any) {
@@ -118,6 +181,7 @@ program
     try {
       const providerName = cmd.optsWithGlobals().provider;
       const provider = getProvider(cmd.optsWithGlobals());
+      requireProviderMethod(provider, 'isAuthenticated', 'authentication status');
       const sessionInfo = providerName === 'tesco'
         ? (await import('./providers/tesco/auth')).getSessionInfo()
         : undefined;
@@ -174,13 +238,15 @@ program
       // provider was named explicitly. This is what makes `search --country NL`
       // work without the user knowing which chains exist in the Netherlands.
       let provider;
-      if (options.country && !cmd.args.includes('--provider')) {
+      if (options.country && !providerWasExplicitlySelected(cmd)) {
         const country = resolveCountry(options.country);
         const [first] = providersFor(country, 'search');
         provider = await createProvider(first.id);
       } else {
-        provider = getProvider(globals);
+        provider = getProvider(globals, 'search');
       }
+
+      await selectStoreIfRequested(provider, cmd);
 
       // Batch mode: thirty queries in one invocation instead of thirty.
       if (options.batch) {
@@ -256,9 +322,7 @@ program
   .action(async (options, cmd) => {
     try {
       const provider: any = getProvider(cmd.optsWithGlobals());
-      if (typeof provider.getFavourites !== 'function') {
-        throw new Error(`Provider "${provider.name}" does not support favourites`);
-      }
+      requireProviderMethod(provider, 'getFavourites', 'favourites');
 
       const products = await provider.getFavourites({ limit: parsePositiveInt(options.limit, 'limit') });
       if (options.json) {
@@ -281,6 +345,7 @@ program
   .action(async (options, cmd) => {
     try {
       const provider = getProvider(cmd.optsWithGlobals());
+      requireProviderMethod(provider, 'getCategories', 'categories');
       const cats = await provider.getCategories();
       if (options.json) {
         console.log(JSON.stringify({ categories: cats }, null, 2));
@@ -305,9 +370,7 @@ program
   .action(async (categoryPath, options, cmd) => {
     try {
       const provider: any = getProvider(cmd.optsWithGlobals());
-      if (typeof provider.browseCategory !== 'function') {
-        throw new Error(`Provider "${provider.name}" does not support category browsing`);
-      }
+      requireProviderMethod(provider, 'browseCategory', 'category browsing');
       const products = await provider.browseCategory(categoryPath, { limit: parsePositiveInt(options.limit, 'limit') });
       if (options.json) {
         console.log(JSON.stringify({ products }, null, 2));
@@ -330,10 +393,11 @@ program
   .option('--json', 'Output as JSON')
   .action(async (query, options, cmd) => {
     try {
-      const provider = getProvider(cmd.optsWithGlobals());
+      const provider = getProvider(cmd.optsWithGlobals(), 'search');
+      await selectStoreIfRequested(provider, cmd);
       const limit = parsePositiveInt(options.limit, 'limit');
       const products = await provider.search(query, { limit: 50 });
-      const available = products.filter(p => p.in_stock && p.retail_price.price > 0);
+      const available = products.filter(p => p.in_stock === true && p.retail_price.price > 0);
       const rated = available
         .filter(p => p.rating)
         .sort((a, b) => (b.rating! - a.rating!) || ((b.review_count ?? 0) - (a.review_count ?? 0)))
@@ -466,7 +530,8 @@ program
   .option('--json', 'Output as JSON')
   .action(async (options, cmd) => {
     try {
-      const provider = getProvider(cmd.optsWithGlobals());
+      const provider = getProvider(cmd.optsWithGlobals(), 'basket');
+      requireProviderMethod(provider, 'getBasket', 'reading the basket');
       const basket = await provider.getBasket();
       
       if (options.json) {
@@ -495,7 +560,8 @@ program
   .option('--batch <file>', 'Add many at once. JSON [{id,qty}], or - for stdin')
   .action(async (productId, options, cmd) => {
     try {
-      const provider = getProvider(cmd.optsWithGlobals());
+      const provider = getProvider(cmd.optsWithGlobals(), 'basket');
+      requireProviderMethod(provider, 'addToBasket', 'adding to the basket');
 
       if (options.batch) {
         const { batchAdd, parseAddInput } = await import('./batch');
@@ -528,7 +594,8 @@ program
   .description('Remove item from basket')
   .action(async (itemId, options, cmd) => {
     try {
-      const provider = getProvider(cmd.optsWithGlobals());
+      const provider = getProvider(cmd.optsWithGlobals(), 'basket');
+      requireProviderMethod(provider, 'removeFromBasket', 'removing from the basket');
       await provider.removeFromBasket(itemId);
       console.log(`✅ Removed from ${provider.name} basket`);
     } catch (error: any) {
@@ -544,7 +611,8 @@ program
   .option('--json', 'Output as JSON')
   .action(async (options, cmd) => {
     try {
-      const provider = getProvider(cmd.optsWithGlobals());
+      const provider = getProvider(cmd.optsWithGlobals(), 'slots');
+      requireProviderMethod(provider, 'getDeliverySlots', 'delivery slots');
       const slots = await provider.getDeliverySlots();
       
       if (options.json) {
@@ -570,7 +638,8 @@ program
   .description('Book delivery slot')
   .action(async (slotId, options, cmd) => {
     try {
-      const provider = getProvider(cmd.optsWithGlobals());
+      const provider = getProvider(cmd.optsWithGlobals(), 'slots');
+      requireProviderMethod(provider, 'bookSlot', 'booking delivery slots');
       await provider.bookSlot(slotId);
       console.log(`✅ Slot booked with ${provider.name}`);
     } catch (error: any) {
@@ -593,7 +662,8 @@ program
   .option('--dry-run', 'Preview only (the default; kept for explicitness)')
   .action(async (options, cmd) => {
     try {
-      const provider = getProvider(cmd.optsWithGlobals());
+      const provider = getProvider(cmd.optsWithGlobals(), 'checkout');
+      requireProviderMethod(provider, 'checkout', 'checkout');
       const placing = options.confirm === true;
 
       if (!placing) {
@@ -625,7 +695,8 @@ program
   .option('--limit <number>', 'Max orders to show', '10')
   .action(async (options, cmd) => {
     try {
-      const provider = getProvider(cmd.optsWithGlobals());
+      const provider = getProvider(cmd.optsWithGlobals(), 'orders');
+      requireProviderMethod(provider, 'getOrders', 'order history');
       const orders = await provider.getOrders();
       
       if (options.json) {
@@ -678,7 +749,8 @@ program
   .description('Update quantity of a basket item')
   .action(async (itemId, quantity, options, cmd) => {
     try {
-      const provider = getProvider((cmd as any).optsWithGlobals());
+      const provider = getProvider((cmd as any).optsWithGlobals(), 'basket');
+      requireProviderMethod(provider, 'updateBasketItem', 'updating the basket');
       await provider.updateBasketItem(itemId, parseInt(quantity));
       console.log(`✅ Updated item ${itemId} to qty ${quantity}`);
     } catch (error: any) {
@@ -698,11 +770,83 @@ program
         console.log('⚠️  Use --force to confirm clearing the basket');
         process.exit(0);
       }
-      const provider = getProvider(cmd.optsWithGlobals());
+      const provider = getProvider(cmd.optsWithGlobals(), 'basket');
+      requireProviderMethod(provider, 'clearBasket', 'clearing the basket');
       await provider.clearBasket();
       console.log(`✅ Basket cleared`);
     } catch (error: any) {
       console.error('❌ Failed to clear basket:', explain(error, { provider: cmd?.optsWithGlobals?.().provider ?? program.opts().provider, action: 'clear basket' }));
+      process.exit(1);
+    }
+  });
+
+// Store lookup. This is read-only and is deliberately separate from selecting
+// a store for search, so an agent can inspect the candidates before choosing.
+program
+  .command('stores')
+  .description('Find retailer stores for local pricing and availability')
+  .option('--query <text>', 'Retailer store search text')
+  .option('--postcode <postcode>', 'Postcode filter')
+  .option('--latitude <degrees>', 'Latitude for nearby stores')
+  .option('--longitude <degrees>', 'Longitude for nearby stores')
+  .option('--range <kilometres>', 'Nearby search range in kilometres')
+  .option('--mode <mode>', 'Shopping mode: pickup or delivery')
+  .option('-l, --limit <number>', 'Max stores', '10')
+  .option('--json', 'Output as JSON')
+  .action(async (options, cmd) => {
+    try {
+      // Parse and validate local input before loading a provider or making a
+      // request. This keeps malformed agent arguments deterministic and safe.
+      const limit = parsePositiveInt(options.limit, 'limit');
+      const latitude = options.latitude === undefined
+        ? undefined
+        : parseFiniteNumber(options.latitude, 'latitude');
+      const longitude = options.longitude === undefined
+        ? undefined
+        : parseFiniteNumber(options.longitude, 'longitude');
+      if ((latitude === undefined) !== (longitude === undefined)) {
+        throw new Error('latitude and longitude must be provided together');
+      }
+      if (latitude !== undefined && (latitude < -90 || latitude > 90)) {
+        throw new Error(`latitude must be between -90 and 90, got "${options.latitude}"`);
+      }
+      if (longitude !== undefined && (longitude < -180 || longitude > 180)) {
+        throw new Error(`longitude must be between -180 and 180, got "${options.longitude}"`);
+      }
+      const range = options.range === undefined
+        ? undefined
+        : parsePositiveNumber(options.range, 'range');
+      const mode = options.mode;
+      if (mode !== undefined && mode !== 'pickup' && mode !== 'delivery') {
+        throw new Error(`mode must be pickup or delivery, got "${mode}"`);
+      }
+
+      const globals = cmd.optsWithGlobals();
+      const provider: any = getProvider(globals, 'stores');
+      requireProviderMethod(provider, 'listStores', 'store lookup');
+      const stores = await provider.listStores({
+        limit,
+        fullTextSearch: options.query,
+        postcode: options.postcode,
+        latitude,
+        longitude,
+        range,
+        shoppingMode: mode,
+        retailerStoreId: globals.storeId,
+      });
+
+      if (options.json) {
+        console.log(JSON.stringify({ stores }, null, 2));
+        return;
+      }
+      console.log(`\n🏪 Stores from ${provider.name}\n`);
+      if (stores.length === 0) {
+        console.log('No stores found.\n');
+        return;
+      }
+      printStores(stores);
+    } catch (error: any) {
+      console.error('❌ Store lookup failed:', explain(error, { provider: cmd?.optsWithGlobals?.().provider ?? program.opts().provider, action: 'list stores' }));
       process.exit(1);
     }
   });
@@ -748,7 +892,7 @@ program
       return;
     }
 
-    const CAPS: Capability[] = ['search', 'basket', 'slots', 'checkout', 'orders'];
+    const CAPS: Capability[] = ['search', 'stores', 'basket', 'slots', 'checkout', 'orders'];
     const width = Math.max(...manifests.map((m) => m.label.length), 8);
 
     console.log(

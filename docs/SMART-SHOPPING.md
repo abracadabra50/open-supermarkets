@@ -224,8 +224,10 @@ async function selectBestProvider(product: string, preferences: any) {
     }
     
     // Availability (10% weight)
-    if (bestProduct.in_stock) {
+    if (bestProduct.in_stock === true) {
       score += 10;
+    } else if (bestProduct.in_stock === null) {
+      score += 5; // Unknown is not the same as confirmed out of stock.
     }
     
     return {
@@ -236,7 +238,7 @@ async function selectBestProvider(product: string, preferences: any) {
         price: priceScore,
         quality: qualityScores[provider],
         preference: preferences.preferredProviders?.includes(provider) ? 20 : 10,
-        availability: bestProduct.in_stock ? 10 : 0
+        availability: bestProduct.in_stock === true ? 10 : bestProduct.in_stock === null ? 5 : 0
       }
     };
   });
@@ -278,7 +280,7 @@ async function findSubstitute(originalProduct: string, reason: 'out_of_stock' | 
   
   // Filter by reason
   if (reason === 'out_of_stock') {
-    const inStock = results.filter(r => r.in_stock);
+    const inStock = results.filter(r => r.in_stock === true);
     return {
       found: inStock.length > 0,
       suggestion: inStock[0],
@@ -492,7 +494,7 @@ Health optimized: All high-risk items are organic"
 Add this to your agent's skill directory:
 
 ```bash
-cp docs/SMART-SHOPPING.md /path/to/agent/skills/uk-grocery-cli/
+cp docs/SMART-SHOPPING.md /path/to/agent/skills/open-supermarkets/
 ```
 
 Your agent can reference this guide when making shopping decisions.

@@ -1,0 +1,17 @@
+{
+  "total": 1,
+  "items": [
+    {
+      "retailerStoreId": "5550",
+      "name": "SuperValu Online",
+      "status": "Active",
+      "currency": "EUR",
+      "postCode": "T12 N799",
+      "addressLine1": "Test Site",
+      "addressLine2": "Cork",
+      "country": "Ireland",
+      "location": { "latitude": 0, "longitude": 0 },
+      "shoppingModes": ["pickup", "DELIVERY"]
+    }
+  ]
+}

@@ -27,7 +27,7 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Typecheck
-        run: npx tsc --noEmit
+        run: npm run typecheck
       - name: Build
         run: npm run build
       - name: Test
@@ -47,11 +47,26 @@ jobs:
       - name: Check the published tarball contents
         run: |
           npm pack --silent > /dev/null
-          tar -tzf open-supermarkets-*.tgz | sed 's|^package/||' | cut -d/ -f1 | sort -u > /tmp/shipped
+          tar -tzf open-supermarkets-*.tgz > /tmp/shipped-files
+          sed 's|^package/||' /tmp/shipped-files | cut -d/ -f1 | sort -u > /tmp/shipped
           echo "Shipping:"; cat /tmp/shipped
           for unwanted in src test docs node_modules .github; do
             if grep -qx "$unwanted" /tmp/shipped; then
               echo "::error::$unwanted/ would be published to npm — check the \"files\" field"
+              exit 1
+            fi
+          done
+          for required in \
+            dist/cli.js \
+            dist/providers/registry.js \
+            dist/providers/aldi-ie.js \
+            dist/providers/dunnes-ie.js \
+            dist/providers/lidl-ie.js \
+            dist/providers/mrprice-ie.js \
+            dist/providers/supervalu-ie.js \
+            dist/providers/tesco-ie.js; do
+            if ! grep -qx "package/$required" /tmp/shipped-files; then
+              echo "::error::required release file $required is missing from the npm tarball"
               exit 1
             fi
           done

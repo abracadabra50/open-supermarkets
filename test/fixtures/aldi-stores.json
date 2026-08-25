@@ -1,0 +1,22 @@
+{
+  "data": [
+    {
+      "id": "D001",
+      "name": "King's Court, Parnell Street Unit 6/7",
+      "address": {
+        "countryName": "Ireland",
+        "regionName": "Dublin",
+        "address1": "King's Court, Parnell Street Unit 6/7",
+        "city": "Dublin",
+        "zipCode": "D01 F295",
+        "latitude": "53.35028",
+        "longitude": "-6.26599"
+      },
+      "availableCustomerServiceTypes": ["walk-in"],
+      "isOpenNow": true
+    }
+  ],
+  "meta": {
+    "pagination": { "offset": 0, "limit": 100, "totalCount": 1 }
+  }
+}

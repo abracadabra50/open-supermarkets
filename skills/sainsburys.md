@@ -6,7 +6,7 @@ compatibility: Node.js 18+, TypeScript, Playwright for auth. UK Sainsbury's deli
 metadata:
   author: zish
   version: "2.1.0"
-  repository: https://github.com/abracadabra50/uk-grocery-cli
+  repository: https://github.com/abracadabra50/open-supermarkets
   tags: [groceries, sainsburys, uk, shopping, automation, mcp, agent-tool]
 allowed-tools: Bash({baseDir}/node:*), Bash(npm:run:groc:*)
 ---

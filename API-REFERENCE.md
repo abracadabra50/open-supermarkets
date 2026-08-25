@@ -1,5 +1,10 @@
 # Sainsbury's API Reference
 
+> This is a legacy, Sainsbury's-specific endpoint record. For the current
+> multi-country provider contract, optional capabilities, store selection, and
+> tri-state stock semantics, see [`docs/API.md`](docs/API.md). The supported
+> command is `supermarket`; `groc` remains only as a compatibility alias.
+
 ## Working Endpoints ✅
 
 ### Authentication

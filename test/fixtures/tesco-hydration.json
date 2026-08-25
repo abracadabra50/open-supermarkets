@@ -1,0 +1,43 @@
+[
+  {
+    "data": {
+      "product": {
+        "id": "7101001",
+        "tpnb": "7100001",
+        "title": "Avonmore Fresh Milk 2L",
+        "defaultImageUrl": "https://img.example.test/avonmore.jpg",
+        "isForSale": true,
+        "sellers": {
+          "results": [
+            {
+              "price": { "actual": 2.69, "unitPrice": 1.35, "unitOfMeasure": "litre" },
+              "promotions": []
+            }
+          ]
+        },
+        "details": { "packSize": { "value": "2", "units": "L" } },
+        "brandName": "Avonmore"
+      }
+    }
+  },
+  {
+    "data": {
+      "product": {
+        "id": "7101002",
+        "tpnb": "7100002",
+        "title": "Tesco Semi Skimmed Milk 2L",
+        "defaultImageUrl": "https://img.example.test/semi.jpg",
+        "isForSale": true,
+        "sellers": {
+          "results": [
+            {
+              "price": { "actual": 2.29, "unitPrice": 1.15, "unitOfMeasure": "litre" },
+              "promotions": []
+            }
+          ]
+        },
+        "details": { "packSize": { "value": 2, "units": "L" } }
+      }
+    }
+  }
+]

@@ -1,0 +1,24 @@
+{
+  "resources": {
+    "results": {
+      "products": [
+        {
+          "id": "gid://shopify/Product/3001",
+          "handle": "avonmore-milk-1l",
+          "title": "Avonmore Fresh Milk 1L",
+          "price": "179",
+          "url": "/products/avonmore-milk-1l",
+          "available": true,
+          "featured_image": { "url": "//cdn.example.test/milk.jpg" }
+        },
+        {
+          "id": "gid://shopify/Product/3002",
+          "title": "Long Life Milk 1L",
+          "price": 1.49,
+          "url": "/products/long-life-milk-1l",
+          "available": false
+        }
+      ]
+    }
+  }
+}

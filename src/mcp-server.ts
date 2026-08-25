@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 /**
- * MCP (Model Context Protocol) Server for UK Grocery CLI
+ * MCP (Model Context Protocol) Server for Open Supermarkets
  *
  * Exposes grocery shopping functions as MCP tools for Claude Desktop
- * and other MCP-compatible clients. Supports all providers:
- * Sainsbury's, Ocado, and Tesco.
+ * and other MCP-compatible clients. Provider metadata and capability checks
+ * are read from the registry, so new countries do not need MCP-specific edits.
  */
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
@@ -13,47 +13,144 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
-import { ProviderFactory, ProviderName, compareProduct } from './providers/index.js';
-import type { FullGroceryProvider } from './providers/types.js';
+import { compareProduct } from './providers/index.js';
+import {
+  assertCapability,
+  createProvider,
+  getManifest,
+  PROVIDERS,
+} from './providers/registry.js';
+import type {
+  AuthModel,
+  Capability,
+  GroceryProvider,
+  ProviderManifest,
+  StoreSearchOptions,
+} from './providers/types.js';
 import { money } from './format.js';
 import { explain } from './errors.js';
 import * as fs from 'fs';
 import * as os from 'os';
 
-const server = new Server(
-  {
-    name: 'open-supermarkets',
-    version: '2.1.0',
-  },
-  {
-    capabilities: {
-      tools: {},
-    },
-  }
-);
+/** Registry ids, including any community providers added for another country. */
+export function providerIds(): string[] {
+  return PROVIDERS.map((provider) => provider.id);
+}
 
-const PROVIDERS: ProviderName[] = ['sainsburys', 'ocado', 'tesco'];
+export function providerIdsForCapability(capability: Capability): string[] {
+  return PROVIDERS
+    .filter((provider) => provider.capabilities.includes(capability))
+    .map((provider) => provider.id);
+}
 
-// Session directories per provider
-const SESSION_PATHS: Record<ProviderName, string> = {
+/**
+ * Only legacy providers write a known local session file. A registry provider
+ * may have no session at all, so callers must treat an unknown path as absent,
+ * not try to pass `undefined` to fs.
+ */
+const SESSION_PATHS: Record<string, string> = {
   sainsburys: `${os.homedir()}/.sainsburys/session.json`,
   ocado: `${os.homedir()}/.ocado/session.json`,
   tesco: `${os.homedir()}/.tesco/session.json`,
 };
 
-function isLoggedIn(provider: ProviderName): boolean {
-  return fs.existsSync(SESSION_PATHS[provider]);
+export function sessionPath(providerId: string): string | undefined {
+  return SESSION_PATHS[providerId];
 }
 
-function requireLogin(provider: ProviderName): string | null {
-  if (!isLoggedIn(provider)) {
-    return `Not logged in to ${provider}. Use grocery_login with provider "${provider}" first.`;
+export function needsStoredLogin(auth: AuthModel): boolean {
+  return auth === 'credentials' || auth === 'session-cookie';
+}
+
+export function isLoggedIn(providerId: string): boolean {
+  const path = sessionPath(providerId);
+  return path ? fs.existsSync(path) : false;
+}
+
+export function requireLogin(providerId: string): string | null {
+  const manifest = getManifest(providerId);
+  if (!needsStoredLogin(manifest.auth)) return null;
+  if (!isLoggedIn(providerId)) {
+    return `Not logged in to ${providerId}. Use grocery_login with provider "${providerId}" first.`;
   }
   return null;
 }
 
-function getProvider(name: ProviderName): FullGroceryProvider {
-  return ProviderFactory.create(name);
+export function authenticationStatus(manifest: ProviderManifest): string {
+  if (!needsStoredLogin(manifest.auth)) return `no stored login required (${manifest.auth})`;
+  return isLoggedIn(manifest.id) ? 'logged in' : 'not logged in';
+}
+
+type ProviderMethod = keyof GroceryProvider;
+type ProviderWithMethod<K extends ProviderMethod> = GroceryProvider & Required<Pick<GroceryProvider, K>>;
+
+/**
+ * Check the declarative contract before importing provider code, then check the
+ * concrete method after construction. This protects search-only integrations
+ * from accidental basket, slot, checkout, or order calls.
+ */
+export async function getCapabilityProvider<K extends ProviderMethod>(
+  providerId: string,
+  capability: Capability,
+  method: K
+): Promise<ProviderWithMethod<K>> {
+  assertCapability(providerId, capability);
+  const provider = await createProvider(providerId);
+  return requireProviderMethod(providerId, capability, provider, method);
+}
+
+export function requireProviderMethod<K extends ProviderMethod>(
+  providerId: string,
+  capability: Capability,
+  provider: GroceryProvider,
+  method: K
+): ProviderWithMethod<K> {
+  if (typeof provider[method] !== 'function') {
+    throw new Error(
+      `Provider "${providerId}" declares "${capability}" but does not implement ${String(method)}.`
+    );
+  }
+  return provider as ProviderWithMethod<K>;
+}
+
+export async function getProvider(providerId: string): Promise<GroceryProvider> {
+  getManifest(providerId);
+  return createProvider(providerId);
+}
+
+export interface StoreToolArguments {
+  query?: string;
+  postcode?: string;
+  latitude?: number;
+  longitude?: number;
+  range?: number;
+  shopping_mode?: 'pickup' | 'delivery';
+  limit?: number;
+}
+
+/** Convert MCP's stable snake_case arguments to the provider contract. */
+export function storeSearchOptions(args: StoreToolArguments): StoreSearchOptions {
+  return {
+    ...(args.query === undefined ? {} : { fullTextSearch: args.query }),
+    ...(args.postcode === undefined ? {} : { postcode: args.postcode }),
+    ...(args.latitude === undefined ? {} : { latitude: args.latitude }),
+    ...(args.longitude === undefined ? {} : { longitude: args.longitude }),
+    ...(args.range === undefined ? {} : { range: args.range }),
+    ...(args.shopping_mode === undefined ? {} : { shoppingMode: args.shopping_mode }),
+    ...(args.limit === undefined ? {} : { limit: args.limit }),
+  };
+}
+
+/** Select a provider store before a search, with an honest capability error. */
+export async function selectStoreForSearch(
+  providerId: string,
+  provider: GroceryProvider,
+  storeId: string,
+): Promise<void> {
+  if (!storeId.trim()) throw new Error('store_id must not be empty.');
+  assertCapability(providerId, 'stores');
+  const selected = requireProviderMethod(providerId, 'stores', provider, 'selectStore');
+  await selected.selectStore(storeId);
 }
 
 function textResult(text: string, isError = false) {
@@ -63,13 +160,26 @@ function textResult(text: string, isError = false) {
   };
 }
 
+function stockLabel(inStock: boolean | null): string {
+  return inStock === true ? 'In stock' : inStock === false ? 'Out of stock' : 'Availability unknown';
+}
+
 // ─── Tool definitions ────────────────────────────────────────────
 
-const providerEnum = { type: 'string', enum: PROVIDERS, description: 'Supermarket provider: sainsburys, ocado, or tesco' };
+export const providerEnum = {
+  type: 'string',
+  get enum() { return providerIds(); },
+  description: 'Supermarket provider id from the provider registry',
+};
 
-server.setRequestHandler(ListToolsRequestSchema, async () => {
-  return {
-    tools: [
+export const storesProviderEnum = {
+  type: 'string',
+  get enum() { return providerIdsForCapability('stores'); },
+  description: 'Provider id with read-only store lookup support',
+};
+
+export function toolDefinitions(): any[] {
+  return [
       // ── Authentication ──
       {
         name: 'grocery_login',
@@ -90,15 +200,35 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         inputSchema: { type: 'object', properties: {} },
       },
 
+      {
+        name: 'grocery_stores',
+        description: 'List stores that can scope local pricing and availability. This is read-only.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            provider: { ...storesProviderEnum },
+            query: { type: 'string', description: 'Retailer store name or text query, where supported' },
+            postcode: { type: 'string', description: 'Postcode filter, where supported' },
+            latitude: { type: 'number', description: 'Latitude for nearby-store search' },
+            longitude: { type: 'number', description: 'Longitude for nearby-store search' },
+            range: { type: 'number', description: 'Nearby-store radius in kilometres' },
+            shopping_mode: { type: 'string', enum: ['pickup', 'delivery'], description: 'Required fulfilment mode for nearby search' },
+            limit: { type: 'number', default: 10, description: 'Maximum stores to return (default: 10)' },
+          },
+          required: ['provider'],
+        },
+      },
+
       // ── Search ──
       {
         name: 'grocery_search',
-        description: 'Search for grocery products at a UK supermarket. Returns product names, prices, stock status, and IDs.',
+        description: 'Search for grocery products. Returns product names, prices, stock status, and IDs.',
         inputSchema: {
           type: 'object',
           properties: {
             provider: { ...providerEnum, default: 'sainsburys' },
             query: { type: 'string', description: 'Search term (e.g., "milk", "organic eggs", "chicken breast")' },
+            store_id: { type: 'string', description: 'Optional retailer store id from grocery_stores' },
             limit: { type: 'number', description: 'Maximum results to return (default: 10)', default: 10 },
           },
           required: ['query'],
@@ -106,12 +236,13 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: 'grocery_compare',
-        description: 'Compare a product across all supermarkets to find the best price. Searches Sainsbury\'s, Ocado, and Tesco simultaneously.',
+        description: 'Compare a product across search-capable providers in one country to find the best price.',
         inputSchema: {
           type: 'object',
           properties: {
             query: { type: 'string', description: 'Product to compare (e.g., "semi-skimmed milk")' },
             limit: { type: 'number', description: 'Results per provider (default: 5)', default: 5 },
+            country: { type: 'string', description: 'ISO 3166-1 alpha-2 country code (default: GB)' },
           },
           required: ['query'],
         },
@@ -132,6 +263,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
               items: { type: 'string' },
               description: 'Product queries, e.g. ["semi skimmed milk","free range eggs"]',
             },
+            store_id: { type: 'string', description: 'Optional retailer store id from grocery_stores, selected once before the batch' },
             limit: { type: 'number', description: 'Candidates per query (default: 5)', default: 5 },
           },
           required: ['queries'],
@@ -347,46 +479,77 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         description: 'List all available supermarket providers and their login status.',
         inputSchema: { type: 'object', properties: {} },
       },
-    ],
-  };
-});
+  ];
+}
+
+/** Construct a server without connecting it, which keeps import-time tests offline. */
+export function createMcpServer(): Server {
+const server = new Server(
+  { name: 'open-supermarkets', version: '3.0.0' },
+  { capabilities: { tools: {} } }
+);
+
+server.setRequestHandler(ListToolsRequestSchema, async () => ({
+  tools: toolDefinitions(),
+}));
 
 // ─── Tool handlers ───────────────────────────────────────────────
 
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args = {} } = request.params;
-  const providerName = ((args as any).provider || 'sainsburys') as ProviderName;
+  const providerName = String((args as any).provider || 'sainsburys');
 
   try {
     // ── grocery_login ──
     if (name === 'grocery_login') {
       const { email, password } = args as { email: string; password: string };
-      const provider = getProvider(providerName);
+      const manifest = getManifest(providerName);
+      if (!needsStoredLogin(manifest.auth)) {
+        return textResult(`Provider "${providerName}" does not support account login. Its auth model is ${manifest.auth}.`, true);
+      }
+      const provider = await getProvider(providerName);
+      if (typeof provider.login !== 'function') {
+        return textResult(`Provider "${providerName}" declares ${manifest.auth} authentication but has no login method.`, true);
+      }
       await provider.login(email, password);
       return textResult(`Logged in to ${providerName} successfully. Session saved.`);
     }
 
     // ── grocery_status ──
     if (name === 'grocery_status') {
-      const statuses = PROVIDERS.map(p => `${p}: ${isLoggedIn(p) ? 'logged in' : 'not logged in'}`);
+      const statuses = PROVIDERS.map((p) => `${p.id}: ${authenticationStatus(p)}`);
       return textResult(`Authentication status:\n${statuses.join('\n')}`);
     }
 
     // ── grocery_providers ──
     if (name === 'grocery_providers') {
-      const info = PROVIDERS.map(p => {
-        const loggedIn = isLoggedIn(p);
-        return `- ${p}: ${loggedIn ? 'logged in' : 'not logged in'}`;
-      });
+      const info = PROVIDERS.map((p) =>
+        `- ${p.id} (${p.label}) | country: ${p.country}${p.countries?.length ? `/${p.countries.join('/')}` : ''} | ` +
+        `auth: ${p.auth} | capabilities: ${p.capabilities.join(', ') || 'none'} | ${authenticationStatus(p)}`
+      );
       return textResult(`Available providers:\n${info.join('\n')}`);
     }
 
-    // ── grocery_compare ──
+    if (name === 'grocery_stores') {
+      const loginError = requireLogin(providerName);
+      if (loginError) return textResult(loginError, true);
+      const provider = await getCapabilityProvider(providerName, 'stores', 'listStores');
+      const stores = await provider.listStores(storeSearchOptions(args as StoreToolArguments));
+      return textResult(JSON.stringify({ provider: providerName, stores }, null, 2));
+    }
+
     if (name === 'grocery_search_batch') {
-      const { queries = [], limit = 5 } = args as { queries?: string[]; limit?: number };
+      const { queries = [], limit = 5, store_id } = args as {
+        queries?: string[];
+        limit?: number;
+        store_id?: string;
+      };
       if (!queries.length) return textResult('Give me at least one query.', true);
+      const loginError = requireLogin(providerName);
+      if (loginError) return textResult(loginError, true);
       const { batchSearch } = await import('./batch.js');
-      const provider = getProvider(providerName);
+      const provider = await getCapabilityProvider(providerName, 'search', 'search');
+      if (store_id !== undefined) await selectStoreForSearch(providerName, provider, store_id);
       const results = await batchSearch(provider, queries, { limit });
       return textResult(JSON.stringify({ provider: providerName, results }, null, 2));
     }
@@ -394,8 +557,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     if (name === 'grocery_basket_add_batch') {
       const { items = [] } = args as { items?: Array<{ id: string; qty?: number }> };
       if (!items.length) return textResult('Give me at least one item.', true);
+      const loginError = requireLogin(providerName);
+      if (loginError) return textResult(loginError, true);
       const { batchAdd } = await import('./batch.js');
-      const provider = getProvider(providerName);
+      const provider = await getCapabilityProvider(providerName, 'basket', 'addToBasket');
       const results = await batchAdd(provider, items);
       const added = results.filter(r => r.ok).length;
       return textResult(
@@ -405,8 +570,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     }
 
     if (name === 'grocery_compare') {
-      const { query, limit = 5 } = args as { query: string; limit?: number };
-      const results = await compareProduct(query, undefined, limit);
+      const { query, limit = 5, country } = args as { query: string; limit?: number; country?: string };
+      const results = await compareProduct(query, undefined, limit, country);
 
       const sections = results.map(({ provider, products, error }) => {
         if (error) return `${provider.toUpperCase()}: Error - ${error}`;
@@ -430,15 +595,19 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
     // ── grocery_search ──
     if (name === 'grocery_search') {
-      // Search can sometimes work without login for some providers, but check anyway
       if (loginError) return textResult(loginError, true);
-      const { query, limit = 10 } = args as { query: string; limit?: number };
-      const provider = getProvider(providerName);
-      const results = await provider.search(query);
+      const { query, limit = 10, store_id } = args as {
+        query: string;
+        limit?: number;
+        store_id?: string;
+      };
+      const provider = await getCapabilityProvider(providerName, 'search', 'search');
+      if (store_id !== undefined) await selectStoreForSearch(providerName, provider, store_id);
+      const results = await provider.search(query, { limit });
       const limited = results.slice(0, limit);
 
       const formatted = limited.map((p, i) => {
-        const stock = p.in_stock ? 'In stock' : 'Out of stock';
+        const stock = stockLabel(p.in_stock);
         const unitPrice = p.unit_price ? ` (${p.unit_price.price}/${p.unit_price.measure})` : '';
         return `${i + 1}. ${p.name}\n   ${money(p.retail_price.price, p.currency)}${unitPrice} | ${stock} | ID: ${p.product_uid}`;
       }).join('\n\n');
@@ -452,7 +621,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     if (name === 'grocery_favourites') {
       if (loginError) return textResult(loginError, true);
       const { limit = 50 } = args as { limit?: number };
-      const provider: any = getProvider(providerName);
+      const provider: any = await getProvider(providerName);
 
       if (typeof provider.getFavourites !== 'function') {
         return textResult(`Provider "${providerName}" does not support favourites.`, true);
@@ -464,7 +633,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       const formatted = products.map((p: any, i: number) => {
-        const stock = p.in_stock ? 'In stock' : 'Out of stock';
+        const stock = stockLabel(p.in_stock);
         const unitPrice = p.unit_price ? ` (${p.unit_price.price}/${p.unit_price.measure})` : '';
         return `${i + 1}. ${p.name}\n   ${money(p.retail_price.price, p.currency)}${unitPrice} | ${stock} | ID: ${p.product_uid}`;
       }).join('\n\n');
@@ -478,7 +647,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     if (name === 'grocery_favourites_search') {
       if (loginError) return textResult(loginError, true);
       const { query, limit = 24 } = args as { query: string; limit?: number };
-      const provider: any = getProvider(providerName);
+      const provider: any = await getProvider(providerName);
 
       if (typeof provider.searchFavourites !== 'function') {
         return textResult(`Provider "${providerName}" does not support favourite search.`, true);
@@ -490,7 +659,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       const formatted = products.map((p: any, i: number) => {
-        const stock = p.in_stock ? 'In stock' : 'Out of stock';
+        const stock = stockLabel(p.in_stock);
         const unitPrice = p.unit_price ? ` (${p.unit_price.price}/${p.unit_price.measure})` : '';
         return `${i + 1}. ${p.name}\n   ${money(p.retail_price.price, p.currency)}${unitPrice} | ${stock} | ID: ${p.product_uid}`;
       }).join('\n\n');
@@ -503,7 +672,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     // ── grocery_categories ──
     if (name === 'grocery_categories') {
       if (loginError) return textResult(loginError, true);
-      const provider: any = getProvider(providerName);
+      const provider: any = await getProvider(providerName);
 
       if (typeof provider.getCategories !== 'function') {
         return textResult(`Provider "${providerName}" does not support category browsing.`, true);
@@ -519,7 +688,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     if (name === 'grocery_browse') {
       if (loginError) return textResult(loginError, true);
       const { category_path, limit = 50 } = args as { category_path: string; limit?: number };
-      const provider: any = getProvider(providerName);
+      const provider: any = await getProvider(providerName);
 
       if (typeof provider.browseCategory !== 'function') {
         return textResult(`Provider "${providerName}" does not support category browsing.`, true);
@@ -531,7 +700,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       const formatted = products.map((p: any, i: number) => {
-        const stock = p.in_stock ? 'In stock' : 'Out of stock';
+        const stock = stockLabel(p.in_stock);
         const unitPrice = p.unit_price ? ` (${p.unit_price.price}/${p.unit_price.measure})` : '';
         return `${i + 1}. ${p.name}\n   ${money(p.retail_price.price, p.currency)}${unitPrice} | ${stock} | ID: ${p.product_uid}`;
       }).join('\n\n');
@@ -543,7 +712,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
     // ── ocado_regulars ──
     if (name === 'ocado_regulars') {
-      const provider: any = getProvider('ocado');
+      const provider: any = await getProvider('ocado');
 
       if (typeof provider.getRegulars !== 'function') {
         return textResult('Ocado provider does not support regulars.', true);
@@ -561,7 +730,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     // ── grocery_basket_view ──
     if (name === 'grocery_basket_view') {
       if (loginError) return textResult(loginError, true);
-      const provider = getProvider(providerName);
+      const provider = await getCapabilityProvider(providerName, 'basket', 'getBasket');
       const basket = await provider.getBasket();
 
       if (basket.items.length === 0) {
@@ -581,7 +750,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     if (name === 'grocery_basket_add') {
       if (loginError) return textResult(loginError, true);
       const { product_id, quantity = 1 } = args as { product_id: string; quantity?: number };
-      const provider = getProvider(providerName);
+      const provider = await getCapabilityProvider(providerName, 'basket', 'addToBasket');
       await provider.addToBasket(product_id, quantity);
       return textResult(`Added ${quantity}x product ${product_id} to ${providerName} basket.`);
     }
@@ -590,7 +759,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     if (name === 'grocery_basket_remove') {
       if (loginError) return textResult(loginError, true);
       const { product_id } = args as { product_id: string };
-      const provider = getProvider(providerName);
+      const provider = await getCapabilityProvider(providerName, 'basket', 'removeFromBasket');
       await provider.removeFromBasket(product_id);
       return textResult(`Removed product ${product_id} from ${providerName} basket.`);
     }
@@ -599,7 +768,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     if (name === 'grocery_basket_update') {
       if (loginError) return textResult(loginError, true);
       const { item_id, quantity } = args as { item_id: string; quantity: number };
-      const provider = getProvider(providerName);
+      const provider = await getCapabilityProvider(providerName, 'basket', 'updateBasketItem');
       await provider.updateBasketItem(item_id, quantity);
       return textResult(`Updated item ${item_id} to quantity ${quantity} in ${providerName} basket.`);
     }
@@ -607,7 +776,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     // ── grocery_basket_clear ──
     if (name === 'grocery_basket_clear') {
       if (loginError) return textResult(loginError, true);
-      const provider = getProvider(providerName);
+      const provider = await getCapabilityProvider(providerName, 'basket', 'clearBasket');
       await provider.clearBasket();
       return textResult(`${providerName} basket cleared.`);
     }
@@ -615,7 +784,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     // ── grocery_slots ──
     if (name === 'grocery_slots') {
       if (loginError) return textResult(loginError, true);
-      const provider = getProvider(providerName);
+      const provider = await getCapabilityProvider(providerName, 'slots', 'getDeliverySlots');
       const slots = await provider.getDeliverySlots();
 
       if (slots.length === 0) {
@@ -634,7 +803,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     if (name === 'grocery_book_slot') {
       if (loginError) return textResult(loginError, true);
       const { slot_id } = args as { slot_id: string };
-      const provider = getProvider(providerName);
+      const provider = await getCapabilityProvider(providerName, 'slots', 'bookSlot');
       await provider.bookSlot(slot_id);
       return textResult(`Slot ${slot_id} booked at ${providerName}.`);
     }
@@ -643,7 +812,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     if (name === 'grocery_checkout') {
       if (loginError) return textResult(loginError, true);
       const { dry_run = true } = args as { dry_run?: boolean };
-      const provider = getProvider(providerName);
+      const provider = await getCapabilityProvider(providerName, 'checkout', 'checkout');
       const order = await provider.checkout(dry_run);
 
       if (dry_run) {
@@ -661,7 +830,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     if (name === 'grocery_orders') {
       if (loginError) return textResult(loginError, true);
       const { limit = 10 } = args as { limit?: number };
-      const provider = getProvider(providerName);
+      const provider = await getCapabilityProvider(providerName, 'orders', 'getOrders');
       const orders = await provider.getOrders();
 
       if (orders.length === 0) {
@@ -700,6 +869,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       if (action === 'add_to_basket') {
+        assertCapability('tesco', 'basket');
+        if (typeof tesco.getBasket !== 'function' || typeof tesco.addToBasket !== 'function') {
+          return textResult('Tesco declares basket support but its basket methods are unavailable.', true);
+        }
         const basket = await tesco.getBasket();
         const alreadyAdded = new Set(basket.items.map(i => i.product_uid));
         await addStaplesToBasket(tesco, staples, alreadyAdded);
@@ -722,16 +895,22 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   }
 });
 
+  return server;
+}
+
 // ─── Start server ────────────────────────────────────────────────
 
 async function main() {
+  const server = createMcpServer();
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error('UK Grocery MCP Server v2.1.0 running on stdio');
-  console.error(`Providers: ${PROVIDERS.join(', ')}`);
+  console.error('Open Supermarkets MCP Server v3.0.0 running on stdio');
+  console.error(`Providers: ${providerIds().join(', ')}`);
 }
 
-main().catch((error) => {
-  console.error('Server error:', error);
-  process.exit(1);
-});
+if (require.main === module) {
+  main().catch((error) => {
+    console.error('Server error:', error);
+    process.exit(1);
+  });
+}

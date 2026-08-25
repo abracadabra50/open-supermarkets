@@ -1,7 +1,7 @@
 {
   "name": "open-supermarkets",
   "version": "3.0.0",
-  "description": "CLI, MCP and Skills for the world's supermarkets. Search, compare, basket and checkout across 9 providers in 6 countries. Built for AI agents.",
+  "description": "CLI, MCP and Skills for the world's supermarkets. Search, compare, basket and checkout across 15 providers in 7 countries. Built for AI agents.",
   "type": "commonjs",
   "main": "dist/cli.js",
   "bin": {
@@ -20,9 +20,11 @@
     "mcp": "tsx src/mcp-server.ts",
     "setup": "./setup.sh",
     "supermarket": "tsx src/cli.ts",
-    "prepublishOnly": "npm run build",
-    "test": "tsx test/lazy-loading.test.ts",
-    "typecheck": "tsc --noEmit"
+    "clean": "node scripts/clean.js",
+    "prepack": "npm run clean && npm run build",
+    "prepublishOnly": "npm run clean && npm run build",
+    "test": "npm run clean && npm run build && node test/ireland-providers.test.js && node test/cli-routing.test.js && node test/http-routing.test.js && tsx test/mcp-routing.test.js && tsx test/lazy-loading.test.ts",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.tests.json"
   },
   "keywords": [
     "groceries",
@@ -64,7 +66,7 @@
   "devDependencies": {
     "@types/node": "^20.0.0",
     "ts-node": "^10.9.0",
-    "tsx": "^4.21.0",
+    "tsx": "^4.23.12",
     "typescript": "^5.0.0"
   },
   "files": [

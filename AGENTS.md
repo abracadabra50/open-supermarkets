@@ -1,6 +1,6 @@
 ## Agent Integration Guide
 
-This document explains how to integrate Sainsbury's CLI into AI agent frameworks.
+This document explains how to integrate Open Supermarkets into AI agent frameworks.
 
 ---
 
@@ -8,7 +8,7 @@ This document explains how to integrate Sainsbury's CLI into AI agent frameworks
 
 - ✅ **OpenClaw** / **Clawdbot** - Skills system
 - ✅ **Pi Agent** / **Mom** - Slack bot with skills
-- ✅ **Claude Desktop** - MCP server (future)
+- ✅ **Claude Desktop** - MCP server
 - ✅ **Custom agents** - Any framework that can call bash
 
 ---
@@ -17,27 +17,27 @@ This document explains how to integrate Sainsbury's CLI into AI agent frameworks
 
 ### 1. Add as Skill
 
-Copy to your agent's skills directory:
+Use the repository's top-level skill file or copy it to your agent's skills directory:
 
 ```bash
-cp -r sainsburys-cli /path/to/agent/skills/
+cp SKILL.md /path/to/agent/skills/open-supermarkets.md
 ```
 
 ### 2. Agent Calls Commands
 
 ```typescript
 // From your agent code
-await bash("cd skills/sainsburys-cli && npm run groc search 'milk'");
+await bash("supermarket search 'milk'");
 ```
 
 ### 3. Parse JSON Responses
 
 ```typescript
-const stdout = await bash("cd skills/sainsburys-cli && npm run groc search 'milk' --json");
+const stdout = await bash("supermarket search 'milk' --json");
 const results = JSON.parse(stdout);
 
 results.products.forEach(product => {
-  console.log(`${product.name} - £${product.retail_price.price}`);
+  console.log(`${product.name} - ${product.currency} ${product.retail_price.price}`);
 });
 ```
 
@@ -51,14 +51,14 @@ The `SKILL.md` follows the open skills format used by OpenClaw, Pi, and other ag
 
 ```yaml
 ---
-name: sainsburys-groceries
-description: AI-powered meal planning and grocery ordering
+name: open-supermarkets
+description: Multi-country grocery search and supported shopping actions
 license: MIT
 compatibility: Node.js 18+, TypeScript, Playwright
 metadata:
   author: zish
-  version: "2.0.0"
-allowed-tools: Bash({baseDir}/node:*), Bash(npm:run:groc:*)
+  version: "3.0.0"
+allowed-tools: Bash({baseDir}/node:*), Bash(supermarket:*), Bash(npm:run:supermarket:*)
 ---
 ```
 
@@ -113,7 +113,7 @@ async function startMealPlanning() {
   
   // 5. Search products
   for (const ingredient of ingredients) {
-    const result = await bash(`cd skills/sainsburys-cli && npm run groc search "${ingredient}" --json`);
+    const result = await bash(`supermarket search "${ingredient}" --json`);
     const products = JSON.parse(result);
     const best = pickBestMatch(products, ingredient);
     shoppingList.push(best);
@@ -123,12 +123,12 @@ async function startMealPlanning() {
   await showShoppingList(shoppingList);
   if (await confirm("Add to basket?")) {
     for (const item of shoppingList) {
-      await bash(`cd skills/sainsburys-cli && npm run groc add ${item.product_uid} --qty ${item.quantity}`);
+      await bash(`supermarket add ${item.product_uid} --qty ${item.quantity}`);
     }
   }
   
   // 7. Checkout
-  await bash(`cd skills/sainsburys-cli && npm run groc basket --json`);
+  await bash(`supermarket basket --json`);
   // ... show basket, book slot, checkout
 }
 ```
@@ -338,7 +338,7 @@ const preferences = {
 ```typescript
 async function searchWithPreferences(query, preferences) {
   // Search Sainsbury's
-  const result = await bash(`cd skills/sainsburys-cli && npm run groc search "${query}" --json`);
+  const result = await bash(`supermarket search "${query}" --json`);
   const products = JSON.parse(result);
   
   // Filter based on preferences
@@ -416,13 +416,13 @@ async function generateShoppingList(meals, preferences) {
 
 ```typescript
 try {
-  await bash("cd skills/sainsburys-cli && npm run groc basket --json");
+  await bash("supermarket basket --json");
 } catch (error) {
   if (error.includes("401") || error.includes("403")) {
     await say("Session expired. Let me log you in again...");
-    await bash(`cd skills/sainsburys-cli && npm run groc login --email ${EMAIL} --password ${PASSWORD}`);
+    await bash(`supermarket login --email ${EMAIL} --password ${PASSWORD}`);
     // Retry
-    await bash("cd skills/sainsburys-cli && npm run groc basket --json");
+    await bash("supermarket basket --json");
   }
 }
 ```
@@ -430,7 +430,7 @@ try {
 ### Product Not Found
 
 ```typescript
-const result = await bash(`cd skills/sainsburys-cli && npm run groc search "${ingredient}" --json`);
+const result = await bash(`supermarket search "${ingredient}" --json`);
 const products = JSON.parse(result);
 
 if (products.products.length === 0) {
@@ -445,10 +445,12 @@ if (products.products.length === 0) {
 ```typescript
 const product = products.products[0];
 
-if (!product.in_stock) {
+if (product.in_stock === false) {
   await say(`${product.name} is out of stock. Here are alternatives:`);
   const alternatives = products.products.slice(1, 4);
   // Show alternatives
+} else if (product.in_stock === null) {
+  await say(`${product.name} has no retailer stock signal. Check the selected store before buying.`);
 }
 ```
 
@@ -466,7 +468,7 @@ async function searchProduct(query) {
     return searchCache.get(query);
   }
   
-  const result = await bash(`cd skills/sainsburys-cli && npm run groc search "${query}" --json`);
+  const result = await bash(`supermarket search "${query}" --json`);
   const products = JSON.parse(result);
   
   searchCache.set(query, products);
@@ -479,31 +481,25 @@ async function searchProduct(query) {
 ### Batch Basket Operations
 
 ```typescript
-// Instead of:
+// Keep basket writes sequential because the basket is shared server-side state.
 for (const item of items) {
-  await bash(`npm run groc add ${item.id} --qty ${item.qty}`);
+  await bash(`supermarket add ${item.id} --qty ${item.qty}`);
 }
-
-// Do:
-await Promise.all(
-  items.map(item => 
-    bash(`npm run groc add ${item.id} --qty ${item.qty}`)
-  )
-);
 ```
 
 ---
 
-## MCP Server (Future)
+## MCP Server
 
-Could be wrapped as an MCP server:
+The repository includes an MCP server. Start it with `supermarket-mcp` after
+building, or use the equivalent tool definitions from the server source:
 
 ```typescript
 // server.ts
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 
 const server = new Server({
-  name: "sainsburys-groceries",
+  name: "open-supermarkets",
   version: "1.0.0"
 }, {
   capabilities: {
@@ -558,16 +554,16 @@ server.setRequestHandler("tools/call", async (request) => {
 ### 1. Test Basic Commands
 
 ```bash
-cd skills/sainsburys-cli
-npm run groc search "test"
-npm run groc basket
+npm run build
+supermarket search "test"
+supermarket basket
 ```
 
 ### 2. Test From Agent
 
 ```typescript
 // In your agent code
-const result = await bash("cd skills/sainsburys-cli && npm run groc search 'milk' --json");
+const result = await bash("supermarket search 'milk' --json");
 console.log(JSON.parse(result));
 ```
 
@@ -575,15 +571,15 @@ console.log(JSON.parse(result));
 
 ```typescript
 // Login
-await bash("cd skills/sainsburys-cli && npm run groc login --email test@example.com --password test123");
+await bash("supermarket login --email test@example.com --password test123");
 
 // Search and add
-const products = await bash("cd skills/sainsburys-cli && npm run groc search 'milk' --json");
+const products = await bash("supermarket search 'milk' --json");
 const firstProduct = JSON.parse(products).products[0];
-await bash(`cd skills/sainsburys-cli && npm run groc add ${firstProduct.product_uid} --qty 2`);
+await bash(`supermarket add ${firstProduct.product_uid} --qty 2`);
 
 // View basket
-const basket = await bash("cd skills/sainsburys-cli && npm run groc basket --json");
+const basket = await bash("supermarket basket --json");
 console.log(JSON.parse(basket));
 ```
 
@@ -594,7 +590,7 @@ console.log(JSON.parse(basket));
 ### OpenClaw
 
 ```typescript
-// skills/sainsburys-groceries/SKILL.md loaded automatically
+// SKILL.md loaded automatically
 
 // Agent uses natural language
 user: "plan meals for this week"
@@ -611,10 +607,10 @@ agent:
 ### Pi Agent (Slack)
 
 ```typescript
-// data/skills/sainsburys-groceries/SKILL.md
+// data/skills/open-supermarkets/SKILL.md
 
 // In meal-planning channel
-await bash("cd skills/sainsburys-groceries && npm run groc search 'milk' --json");
+await bash("supermarket search 'milk' --json");
 
 // Show results with Block Kit
 await sendBlocks(productBlocks);

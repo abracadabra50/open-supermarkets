@@ -1,0 +1,42 @@
+[
+  {
+    "data": {
+      "search": {
+        "results": [
+          {
+            "node": {
+              "__typename": "ProductType",
+              "tpnc": "7001001",
+              "tpnb": "7001000",
+              "gtin": "05000000000001",
+              "title": "Tesco Irish Whole Milk 2L",
+              "brandName": "Tesco",
+              "defaultImageUrl": "https://img.example.test/tesco-milk.jpg",
+              "isForSale": true,
+              "details": { "packSize": { "value": 2, "units": "L" } },
+              "sellers": {
+                "results": [
+                  {
+                    "price": { "actual": 2.35, "unitPrice": 1.18, "unitOfMeasure": "litre" },
+                    "promotions": [
+                      { "description": "Clubcard Price", "price": { "afterDiscount": 2.0, "beforeDiscount": 2.35 } }
+                    ]
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "node": {
+              "__typename": "ProductType",
+              "tpnc": "7001002",
+              "title": "Tesco Skimmed Milk 1L",
+              "isForSale": false,
+              "sellers": { "results": [ { "price": { "actual": 1.25 } } ] }
+            }
+          }
+        ]
+      }
+    }
+  }
+]
