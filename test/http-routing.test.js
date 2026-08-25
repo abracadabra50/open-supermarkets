@@ -3,6 +3,7 @@
 const assert = require('node:assert/strict');
 const http = require('node:http');
 const { createServer } = require('../dist/http-server.js');
+const { ProviderInputError } = require('../dist/providers/ie/shared.js');
 
 function listen(server) {
   return new Promise((resolve, reject) => {
@@ -51,6 +52,15 @@ async function main() {
     assert.equal(search.body.products[0].name, 'milk');
     assert.equal(resolverCalls, 1, 'search should call only the injected provider');
 
+    const whitespaceSearch = await request(port, '/search?provider=ah&q=%20%20');
+    assert.equal(whitespaceSearch.status, 400);
+    assert.match(whitespaceSearch.body.error, /missing query parameter: q/i);
+    assert.equal(resolverCalls, 1, 'whitespace-only search must fail before provider work');
+
+    const health = await request(port, '/health?provider=ah');
+    assert.equal(health.status, 200);
+    assert.deepEqual(health.body.endpoints, ['/search?q=']);
+
     const basket = await request(port, '/basket?provider=ah');
     assert.equal(basket.status, 501);
     assert.match(basket.body.error, /ah.*does not support.*basket/i);
@@ -75,13 +85,13 @@ async function main() {
     async listStores(options) {
       storeEvents.push({ type: 'listStores', options });
       if (options.fullTextSearch === 'invalid-combination') {
-        throw new RangeError('fullTextSearch cannot be combined with coordinates');
+        throw new ProviderInputError('fullTextSearch cannot be combined with coordinates');
       }
       return [{ store_id: '258', name: 'Dublin fixture', postcode: 'D02' }];
     },
     async selectStore(storeId) {
       storeEvents.push({ type: 'selectStore', storeId });
-      if (storeId !== '258') throw new Error(`store ${storeId} not found`);
+      if (storeId !== '258') throw new ProviderInputError(`store ${storeId} not found`);
     },
     async search(query) {
       storeEvents.push({ type: 'search', query });
@@ -134,6 +144,88 @@ async function main() {
     await close(storeServer);
   }
 
+  const selectionFailureServer = createServer({
+    apiToken: null,
+    resolveProvider: () => ({
+      name: 'dunnes-ie',
+      async listStores() { return []; },
+      async selectStore() {
+        throw Object.assign(new Error('upstream connection reset'), {
+          name: 'ProviderInputError',
+          statusCode: 400,
+        });
+      },
+      async search() { return []; },
+    }),
+  });
+  const selectionFailurePort = await listen(selectionFailureServer);
+  try {
+    const response = await request(
+      selectionFailurePort,
+      '/search?provider=dunnes-ie&store_id=258&q=milk'
+    );
+    assert.equal(response.status, 500);
+  } finally {
+    await close(selectionFailureServer);
+  }
+
+  const discoveryFailureServer = createServer({
+    apiToken: null,
+    resolveProvider: () => ({
+      name: 'dunnes-ie',
+      async listStores() {
+        throw Object.assign(new Error('upstream connection reset'), {
+          name: 'ProviderInputError',
+          statusCode: 400,
+        });
+      },
+      async selectStore() {},
+      async search() { return []; },
+    }),
+  });
+  const discoveryFailurePort = await listen(discoveryFailureServer);
+  try {
+    const response = await request(discoveryFailurePort, '/stores?provider=dunnes-ie');
+    assert.equal(response.status, 500);
+  } finally {
+    await close(discoveryFailureServer);
+  }
+
+  const requiredStoreServer = createServer({ apiToken: null });
+  const requiredStorePort = await listen(requiredStoreServer);
+  try {
+    const health = await request(requiredStorePort, '/health?provider=aldi-ie');
+    assert.deepEqual(health.body.endpoints, [
+      '/search?q=&store_id=',
+      '/stores?query=&postcode=&latitude=&longitude=&range=&mode=&limit=',
+    ]);
+    for (const provider of ['aldi-ie', 'dunnes-ie', 'supervalu-ie']) {
+      const response = await request(
+        requiredStorePort,
+        `/search?provider=${provider}&q=milk`
+      );
+      assert.equal(response.status, 400, provider);
+      assert.match(response.body.error, /store/i, provider);
+    }
+  } finally {
+    await close(requiredStoreServer);
+  }
+
+  const internalRangeServer = createServer({
+    apiToken: null,
+    resolveProvider: () => ({
+      name: 'ah',
+      async search() { throw new RangeError('internal array size failure'); },
+    }),
+  });
+  const internalRangePort = await listen(internalRangeServer);
+  try {
+    const response = await request(internalRangePort, '/search?provider=ah&q=milk');
+    assert.equal(response.status, 500);
+  } finally {
+    await close(internalRangeServer);
+  }
+
   const missingMethodProvider = {
     name: 'sainsburys',
     async search() { return []; },
@@ -161,7 +253,7 @@ async function main() {
     assert.equal((await request(authPort, '/health')).status, 401);
     const health = await request(authPort, '/health', { authorization: 'Bearer fixture-token' });
     assert.equal(health.status, 200);
-    assert.ok(health.body.endpoints.includes('/stores?query=&postcode=&latitude=&longitude=&range=&mode=&limit='));
+    assert.deepEqual(health.body.endpoints, ['/search?q=']);
   } finally {
     await close(authServer);
   }

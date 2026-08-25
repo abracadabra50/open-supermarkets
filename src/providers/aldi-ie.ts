@@ -27,6 +27,7 @@ import {
   jsonResponse,
   parseUnitPrice,
   ProviderHttpError,
+  ProviderInputError,
   ProviderProtocolError,
   requireRecordArray,
   requireQuery,
@@ -105,7 +106,7 @@ function mapProduct(item: Record<string, unknown>): Product | undefined {
 
 function normalizedStoreId(value: unknown): string {
   const storeId = firstString(value)?.toUpperCase();
-  if (!storeId) throw new RangeError('storeId must be a non-empty string');
+  if (!storeId) throw new ProviderInputError('storeId must be a non-empty string');
   return storeId;
 }
 
@@ -196,15 +197,15 @@ function storeLookupOptions(options: StoreSearchOptions): {
   longitude?: number;
 } {
   if (options.range !== undefined) {
-    throw new RangeError('Aldi store lookup does not support a range filter');
+    throw new ProviderInputError('Aldi store lookup does not support a range filter');
   }
   if (options.shoppingMode !== undefined) {
-    throw new RangeError(
+    throw new ProviderInputError(
       'Aldi Ireland exposes walk-in service points only; pickup and delivery filters are unsupported'
     );
   }
   if (options.retailerStoreId !== undefined) {
-    throw new RangeError(
+    throw new ProviderInputError(
       'Aldi store lookup does not support retailerStoreId filtering; use selectStore for validated selection'
     );
   }
@@ -216,14 +217,14 @@ function storeLookupOptions(options: StoreSearchOptions): {
   const postcode = options.postcode === undefined ? undefined : requireQuery(options.postcode);
   const coordinatesSpecified = options.latitude !== undefined || options.longitude !== undefined;
   if (fullTextSearch && postcode) {
-    throw new RangeError('fullTextSearch cannot be combined with postcode');
+    throw new ProviderInputError('fullTextSearch cannot be combined with postcode');
   }
   if (postcode && coordinatesSpecified) {
-    throw new RangeError('postcode cannot be combined with coordinates');
+    throw new ProviderInputError('postcode cannot be combined with coordinates');
   }
   if (!coordinatesSpecified) return { limit, offset, fullTextSearch, postcode };
   if (fullTextSearch) {
-    throw new RangeError('fullTextSearch cannot be combined with coordinates');
+    throw new ProviderInputError('fullTextSearch cannot be combined with coordinates');
   }
   if (
     options.latitude === undefined ||
@@ -233,7 +234,7 @@ function storeLookupOptions(options: StoreSearchOptions): {
     options.latitude < -90 || options.latitude > 90 ||
     options.longitude < -180 || options.longitude > 180
   ) {
-    throw new RangeError('latitude and longitude must be valid coordinates');
+    throw new ProviderInputError('latitude and longitude must be valid coordinates');
   }
   return { limit, offset, postcode, latitude: options.latitude, longitude: options.longitude };
 }
@@ -258,6 +259,11 @@ export class AldiIrelandProvider implements GroceryProvider {
 
   async search(query: string, options: SearchOptions = {}): Promise<Product[]> {
     const normalizedQuery = requireQuery(query);
+    if (!this.storeId) {
+      throw new ProviderInputError(
+        'Aldi Ireland requires a store id. Pass --store-id or set SUPERMARKET_ALDI_IE_STORE_ID.'
+      );
+    }
     const limit = clampLimit(options.limit, 10, 60);
     const offset = clampOffset(options.offset);
     let lastError: unknown;
@@ -355,7 +361,7 @@ export class AldiIrelandProvider implements GroceryProvider {
       }
       if (stores.length < STORE_LOOKUP_MAX) break;
     }
-    throw new ProviderProtocolError('Aldi Ireland stores', `service point ${selectedStoreId} was not found`);
+    throw new ProviderInputError(`Aldi Ireland service point ${selectedStoreId} was not found`);
   }
 
   static productUrl(product: Product): string {

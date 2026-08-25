@@ -2,9 +2,10 @@
 
 import http from 'node:http';
 import { URL } from 'node:url';
-import { createProvider, getManifest } from './providers';
+import { createProvider, getManifest, UnknownProviderError } from './providers';
 import type { ProviderName } from './providers';
 import type { Capability, GroceryProvider, SearchOptions, StoreSearchOptions } from './providers/types';
+import { ProviderInputError } from './providers/ie/shared';
 
 type FavouritesProvider = GroceryProvider & {
   getFavourites?: (options?: SearchOptions) => Promise<unknown[]>;
@@ -75,8 +76,15 @@ function parsePositiveInt(value: string | null, name: string, defaultValue: numb
   return parsed;
 }
 
-function badRequest(message: string): Error & { statusCode: 400 } {
-  return Object.assign(new Error(message), { statusCode: 400 as const });
+class HttpInputError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'HttpInputError';
+  }
+}
+
+function badRequest(message: string): HttpInputError {
+  return new HttpInputError(message);
 }
 
 function optionalQuery(url: URL, name: string): string | undefined {
@@ -153,8 +161,8 @@ function sendJson(res: http.ServerResponse, status: number, data: unknown): void
 }
 
 function requireQuery(url: URL, name: string): string {
-  const value = url.searchParams.get(name);
-  if (!value) throw Object.assign(new Error(`Missing query parameter: ${name}`), { statusCode: 400 });
+  const value = url.searchParams.get(name)?.trim();
+  if (!value) throw badRequest(`Missing query parameter: ${name}`);
   return value;
 }
 
@@ -181,6 +189,38 @@ function routeMethod(
   return candidate.bind(context.provider);
 }
 
+function endpointsFor(context: ProviderContext): string[] {
+  const { manifest, provider } = context;
+  const endpoints: string[] = [];
+  if (manifest.capabilities.includes('search') && typeof provider.search === 'function') {
+    endpoints.push(
+      manifest.capabilities.includes('stores') ? '/search?q=&store_id=' : '/search?q='
+    );
+  }
+  if (manifest.capabilities.includes('stores') && typeof provider.listStores === 'function') {
+    endpoints.push('/stores?query=&postcode=&latitude=&longitude=&range=&mode=&limit=');
+  }
+  if (manifest.capabilities.includes('basket')) {
+    if (typeof provider.addToBasket === 'function') endpoints.push('/add?id=&qty=');
+    if (typeof provider.removeFromBasket === 'function') endpoints.push('/remove?id=');
+    if (typeof provider.updateBasketItem === 'function') endpoints.push('/update?id=&qty=');
+    if (typeof provider.getBasket === 'function') endpoints.push('/basket');
+  }
+  const favouritesProvider = provider as FavouritesProvider;
+  if (typeof favouritesProvider.getFavourites === 'function') endpoints.push('/favourites');
+  if (typeof favouritesProvider.searchFavourites === 'function') endpoints.push('/fav-search?q=');
+  return endpoints;
+}
+
+function statusCodeFor(error: unknown): number {
+  if (
+    error instanceof HttpInputError ||
+    error instanceof ProviderInputError ||
+    error instanceof UnknownProviderError
+  ) return 400;
+  return 500;
+}
+
 async function handleRequest(
   req: http.IncomingMessage,
   res: http.ServerResponse,
@@ -196,24 +236,16 @@ async function handleRequest(
     return sendJson(res, 405, { error: 'Method not allowed' });
   }
 
+  const context = await getProvider(url, options);
+
   if (url.pathname === '/' || url.pathname === '/health') {
     return sendJson(res, 200, {
       ok: true,
-      provider: url.searchParams.get('provider') || options.defaultProvider,
-      endpoints: [
-        '/search?q=',
-        '/stores?query=&postcode=&latitude=&longitude=&range=&mode=&limit=',
-        '/add?id=&qty=',
-        '/remove?id=',
-        '/update?id=&qty=',
-        '/basket',
-        '/favourites',
-        '/fav-search?q='
-      ],
+      provider: context.name,
+      endpoints: endpointsFor(context),
     });
   }
 
-  const context = await getProvider(url, options);
   const { provider } = context;
 
   if (url.pathname === '/stores') {
@@ -223,7 +255,7 @@ async function handleRequest(
       const stores = await listStores(storeSearchOptions(url));
       return sendJson(res, 200, { stores });
     } catch (error: any) {
-      if (error instanceof RangeError) {
+      if (error instanceof ProviderInputError) {
         return sendJson(res, 400, { error: error.message });
       }
       throw error;
@@ -240,7 +272,8 @@ async function handleRequest(
       try {
         await selectStore(storeId);
       } catch (error: any) {
-        const detail = error?.message || 'store was not found';
+        if (!(error instanceof ProviderInputError)) throw error;
+        const detail = error.message || 'store was not found';
         return sendJson(res, 400, { error: `Invalid store_id "${storeId}": ${detail}` });
       }
     }
@@ -254,7 +287,7 @@ async function handleRequest(
     const addToBasket = routeMethod(context, 'basket', 'addToBasket', '/add');
     if (typeof addToBasket === 'string') return sendJson(res, 501, { error: addToBasket });
     const id = url.searchParams.get('id') || url.searchParams.get('q');
-    if (!id) throw Object.assign(new Error('Missing query parameter: id'), { statusCode: 400 });
+    if (!id) throw badRequest('Missing query parameter: id');
     const qty = parsePositiveInt(url.searchParams.get('qty'), 'qty', 1);
     await addToBasket(id, qty);
     return sendJson(res, 200, { ok: true, provider: provider.name, product_id: id, quantity: qty });
@@ -264,7 +297,7 @@ async function handleRequest(
     const removeFromBasket = routeMethod(context, 'basket', 'removeFromBasket', '/remove');
     if (typeof removeFromBasket === 'string') return sendJson(res, 501, { error: removeFromBasket });
     const id = url.searchParams.get('id') || url.searchParams.get('q');
-    if (!id) throw Object.assign(new Error('Missing query parameter: id'), { statusCode: 400 });
+    if (!id) throw badRequest('Missing query parameter: id');
     await removeFromBasket(id);
     return sendJson(res, 200, { ok: true, provider: provider.name, item_id: id });
   }
@@ -273,7 +306,7 @@ async function handleRequest(
     const updateBasketItem = routeMethod(context, 'basket', 'updateBasketItem', '/update');
     if (typeof updateBasketItem === 'string') return sendJson(res, 501, { error: updateBasketItem });
     const id = url.searchParams.get('id') || url.searchParams.get('q');
-    if (!id) throw Object.assign(new Error('Missing query parameter: id'), { statusCode: 400 });
+    if (!id) throw badRequest('Missing query parameter: id');
     const qty = parsePositiveInt(url.searchParams.get('qty'), 'qty', 1);
     await updateBasketItem(id, qty);
     return sendJson(res, 200, { ok: true, provider: provider.name, item_id: id, quantity: qty });
@@ -312,7 +345,7 @@ async function handleRequest(
 function createServerFromResolvedOptions(resolved: ResolvedHttpServerOptions): http.Server {
   return http.createServer((req, res) => {
     handleRequest(req, res, resolved).catch((error: any) => {
-      const status = Number.isInteger(error?.statusCode) ? error.statusCode : 500;
+      const status = statusCodeFor(error);
       sendJson(res, status, { error: error?.message || 'Internal server error' });
     });
   });

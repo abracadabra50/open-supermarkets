@@ -22,6 +22,13 @@ export class ProviderHttpError extends Error {
   }
 }
 
+export class ProviderInputError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ProviderInputError';
+  }
+}
+
 export class ProviderProtocolError extends Error {
   readonly provider: string;
 
