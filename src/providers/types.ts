@@ -24,6 +24,20 @@ export interface Product {
   rating?: number;       // 0-5 overall rating, when the provider exposes it
   review_count?: number; // number of ratings behind `rating`
   size?: string;         // pack size, e.g. "750g", "6 pack"
+  /**
+   * GTIN-14, when the provider exposes a real barcode.
+   *
+   * This is the only field that means the same thing at two different
+   * retailers, so it is what turns "compare these baskets" from fuzzy name
+   * matching into an exact join — the same argument the Kroger provider
+   * already makes for Open Food Facts enrichment. Own-label lines have no
+   * shared barcode by definition and simply leave it undefined.
+   *
+   * Always normalised through `gtin.ts` to GTIN-14 and check-digit validated,
+   * because providers disagree about zero-padding: Tesco returns
+   * `05000157024671`, Sainsbury's `5000157026071`.
+   */
+  gtin?: string;
 }
 
 export interface BasketItem {

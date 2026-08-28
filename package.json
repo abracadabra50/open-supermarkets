@@ -21,7 +21,7 @@
     "setup": "./setup.sh",
     "supermarket": "tsx src/cli.ts",
     "prepublishOnly": "npm run build",
-    "test": "tsx test/lazy-loading.test.ts",
+    "test": "tsx test/lazy-loading.test.ts && tsx test/gtin.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "keywords": [
