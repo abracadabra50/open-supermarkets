@@ -1,4 +1,5 @@
 import axios, { AxiosInstance } from 'axios';
+import { cleanGtin } from './gtin.js';
 import { GroceryProvider, Product, Basket, DeliverySlot, Order, SearchOptions, BasketItem } from './types';
 import { login } from '../auth/login';
 import * as fs from 'fs';
@@ -124,7 +125,12 @@ export class SainsburysProvider implements GroceryProvider {
       unit_price: p.unit_price,
       in_stock: p.in_stock !== false && p.is_available !== false,
       image_url: p.image || p.assets?.plp_image,
-      provider: this.name
+      provider: this.name,
+      // Sainsbury's returns `eans: ["5000157026071"]` on every product and it
+      // was being dropped here. An array because a product can carry more than
+      // one barcode (a multipack and its inner unit); the first is the one that
+      // scans at the till.
+      gtin: cleanGtin(p.eans?.[0])
     };
   }
 

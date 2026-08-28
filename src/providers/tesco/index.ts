@@ -6,6 +6,7 @@
  */
 
 import { GroceryProvider, Product, Basket, DeliverySlot, Order, SearchOptions, BasketItem } from '../types';
+import { cleanGtin } from '../gtin.js';
 import { TescoAPI } from './api';
 import { login, loadSession, clearSession, getCookieString } from './auth';
 
@@ -260,6 +261,11 @@ export class TescoProvider implements GroceryProvider {
 
     return {
       product_uid: String(p?.id || p?.gtin || ''),
+      // The GraphQL query has always selected `gtin`; it was only ever used as
+      // a fallback for product_uid, which never fires because `id` is present.
+      // product_uid must stay the internal id — basket operations address
+      // products by it — so the barcode gets its own field.
+      gtin: cleanGtin(p?.gtin),
       name: p?.title || p?.name || 'Unknown product',
       description: Array.isArray(p?.description?.features)
         ? p.description.features.join('; ')
