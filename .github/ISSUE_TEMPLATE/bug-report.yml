@@ -1,0 +1,63 @@
+name: Bug report
+description: Report incorrect or broken Open Supermarkets behaviour
+title: "[bug] "
+labels: []
+body:
+  - type: input
+    id: provider
+    attributes:
+      label: Provider
+      placeholder: e.g. Tesco
+
+  - type: input
+    id: command
+    attributes:
+      label: Command / interface
+      placeholder: e.g. supermarket search milk --provider tesco, MCP grocery_search, HTTP /search
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behaviour
+      description: Include redacted output or errors where useful.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+      description: Give the smallest sequence that reproduces the problem.
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Version / commit
+      placeholder: e.g. 3.0.0
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, Node version, country/region and anything else relevant. Do not include private account details.
+
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Safety
+      options:
+        - label: I have removed passwords, API secrets, session cookies, addresses, payment data and private order data.
+          required: true
+        - label: This report does not contain an undisclosed exploitable security vulnerability. If it does, I will follow SECURITY.md instead.
+          required: true
