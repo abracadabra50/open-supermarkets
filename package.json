@@ -1,10 +1,11 @@
 {
   "name": "open-supermarkets",
   "version": "3.0.0",
-  "description": "CLI, MCP and Skills for the world's supermarkets. Search, compare, basket and checkout across 9 providers in 6 countries. Built for AI agents.",
+  "description": "Open-source grocery infrastructure for humans and AI agents. Search live products and prices, compare retailers, build baskets and check out safely across supermarkets worldwide.",
   "type": "commonjs",
   "main": "dist/cli.js",
   "bin": {
+    "open-supermarkets": "dist/cli.js",
     "supermarket": "dist/cli.js",
     "supermarket-mcp": "dist/mcp-server.js",
     "supermarket-api": "dist/http-server.js",
@@ -30,14 +31,19 @@
     "shopping",
     "automation",
     "ai-agent",
+    "ai-agents",
     "mcp",
+    "mcp-server",
     "model-context-protocol",
+    "agent-skills",
     "cli",
     "tesco",
     "sainsburys",
     "ocado",
     "albert-heijn",
     "instacart",
+    "kroger",
+    "mercadona",
     "open-food-facts",
     "uk",
     "netherlands",
@@ -52,6 +58,20 @@
     "type": "git",
     "url": "git+https://github.com/abracadabra50/open-supermarkets.git"
   },
+  "homepage": "https://github.com/abracadabra50/open-supermarkets#readme",
+  "bugs": {
+    "url": "https://github.com/abracadabra50/open-supermarkets/issues"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "files": [
+    "dist",
+    "skills",
+    "SKILL.md",
+    "README.md",
+    "LICENSE"
+  ],
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.26.0",
     "axios": "^1.6.0",
@@ -66,19 +86,5 @@
     "ts-node": "^10.9.0",
     "tsx": "^4.21.0",
     "typescript": "^5.0.0"
-  },
-  "files": [
-    "dist",
-    "skills",
-    "SKILL.md",
-    "README.md",
-    "LICENSE"
-  ],
-  "homepage": "https://github.com/abracadabra50/open-supermarkets#readme",
-  "bugs": {
-    "url": "https://github.com/abracadabra50/open-supermarkets/issues"
-  },
-  "engines": {
-    "node": ">=18"
   }
 }
