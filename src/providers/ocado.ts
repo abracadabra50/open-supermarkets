@@ -189,7 +189,7 @@ export class OcadoProvider implements GroceryProvider {
       await page.waitForSelector('input[type="email"], input[name="email"], #username', { timeout: 15000 });
       await page.fill('input[type="email"], input[name="email"], #username', email);
       await page.fill('input[type="password"], input[name="password"], #password', password);
-      await page.click('button[type="submit"]');
+      await page.click('[data-synthetics="login-submit-button"]');
 
       // Logged-in pages greet the user / drop the login form
       await page.waitForTimeout(6000);
