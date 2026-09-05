@@ -1,0 +1,70 @@
+name: Supermarket / provider request
+description: Propose a retailer or country for Open Supermarkets
+title: "[provider] "
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping expand Open Supermarkets. Before filing this, check `docs/providers/evaluated.md` so we do not repeat an investigation that is already documented.
+
+  - type: input
+    id: retailer
+    attributes:
+      label: Retailer
+      placeholder: e.g. Lidl
+    validations:
+      required: true
+
+  - type: input
+    id: country
+    attributes:
+      label: Country / region
+      placeholder: e.g. Germany
+    validations:
+      required: true
+
+  - type: textarea
+    id: use-case
+    attributes:
+      label: What would you like to do?
+      description: Search, store stock, basket, slots, checkout, order history, etc.
+    validations:
+      required: true
+
+  - type: textarea
+    id: research
+    attributes:
+      label: What have you verified?
+      description: Share public endpoints, app/web behaviour or protocol observations. Do not paste credentials, cookies or private account data.
+
+  - type: dropdown
+    id: can-test
+    attributes:
+      label: Can you test this retailer with a real account or local store?
+      options:
+        - "Yes"
+        - "No"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: maintain
+    attributes:
+      label: Would you be willing to contribute or maintain the provider?
+      options:
+        - "Yes"
+        - "Maybe"
+        - "No"
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: I checked `docs/providers/evaluated.md` first.
+          required: true
+        - label: I have not included passwords, API secrets, session cookies, addresses, payment data or private order data.
+          required: true
