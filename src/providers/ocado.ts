@@ -2,6 +2,7 @@ import axios, { AxiosInstance } from 'axios';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import * as readline from 'readline';
 import { GroceryProvider, Product, Basket, BasketItem, DeliverySlot, Order, SearchOptions } from './types';
 
 /**
@@ -84,6 +85,16 @@ const COMPLETED_ORDERS_QUERY = `query GetCompletedOrders($first: Int!, $after: S
 interface OcadoSession {
   cookies: any[];
   savedAt: string;
+}
+
+function ask(question: string): Promise<string> {
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  return new Promise(resolve => {
+    rl.question(question, answer => {
+      rl.close();
+      resolve(answer.trim());
+    });
+  });
 }
 
 function num(v: any): number | undefined {
@@ -189,7 +200,19 @@ export class OcadoProvider implements GroceryProvider {
       await page.waitForSelector('input[type="email"], input[name="email"], #username', { timeout: 15000 });
       await page.fill('input[type="email"], input[name="email"], #username', email);
       await page.fill('input[type="password"], input[name="password"], #password', password);
-      await page.click('button[type="submit"]');
+      await page.click('[data-synthetics="login-submit-button"]');
+
+      const otpInput = page.locator('[data-synthetics="username-input"], input[name="otpVerify"]');
+
+      if (await otpInput.isVisible({ timeout: 8000 }).catch(() => false)) {
+        console.log('\n🔐 MFA required — check your email for a one-time code.');
+        const otp = await ask('Enter the OTP code from your email: ');
+        if (!otp || otp.length < 6) throw new Error('Invalid OTP code');
+        await otpInput.fill(otp);
+        await page.waitForTimeout(400);
+        // yes, it really does identify as password-reset-button
+        await page.click('[data-synthetics="password-reset-button"]');
+      }
 
       // Logged-in pages greet the user / drop the login form
       await page.waitForTimeout(6000);
