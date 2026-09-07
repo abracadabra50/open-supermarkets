@@ -142,21 +142,33 @@ export class SainsburysProvider implements GroceryProvider {
   }
 
   async getFavourites(options?: SearchOptions): Promise<Product[]> {
-    const response = await this.client.get('/product/v1/favourites', {
-      params: {
-        'include[ASSOCIATIONS]': 'true',
-        'include[REPLACEMENT_PRODUCTS]': 'true',
-        minimised: 'true',
-        store_identifier: this.storeNumber
-      },
-      headers: {
-        Referer: 'https://www.sainsburys.co.uk/gol-ui/favourites-as-list'
-      }
-    });
-
-    const products = (response.data.products || []).map((p: any) => this.mapProduct(p));
     const offset = options?.offset || 0;
     const limit = options?.limit;
+    const needed = typeof limit === 'number' ? offset + limit : Infinity;
+    const pageSize = 24;
+    const products: Product[] = [];
+
+    for (let page = 1; products.length < needed && page <= 100; page++) {
+      const response = await this.client.get('/product/v1/favourites', {
+        params: {
+          'include[ASSOCIATIONS]': 'true',
+          'include[REPLACEMENT_PRODUCTS]': 'true',
+          minimised: 'true',
+          store_identifier: this.storeNumber,
+          page_number: page,
+          page_size: pageSize
+        },
+        headers: {
+          Referer: 'https://www.sainsburys.co.uk/gol-ui/favourites-as-list'
+        }
+      });
+
+      const batch = (response.data.products || []).map((p: any) => this.mapProduct(p));
+      if (batch.length === 0) break;
+      products.push(...batch);
+      if (batch.length < pageSize) break;
+    }
+
     return typeof limit === 'number' ? products.slice(offset, offset + limit) : products.slice(offset);
   }
 
