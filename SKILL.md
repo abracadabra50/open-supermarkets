@@ -28,7 +28,7 @@ Each supermarket has a dedicated skill file with provider-specific commands, aut
 | **Sainsbury's** | [`skills/sainsburys.md`](skills/sainsburys.md) | Full coverage |
 | **Tesco** | [`skills/tesco.md`](skills/tesco.md) | Full coverage + staples |
 | **Ocado** | [`skills/ocado.md`](skills/ocado.md) | Full coverage except slot booking/checkout (AWS WAF) |
-| **Tesco Magyarország** | [`skills/tesco-hu.md`](skills/tesco-hu.md) | Search; basket pending live verification |
+| **Tesco Magyarország** | [`skills/tesco-hu.md`](skills/tesco-hu.md) | Search and basket; no slots/checkout |
 
 ---
 

@@ -221,8 +221,8 @@ field names came from the storefront's server-rendered Apollo cache.
 
 Basket mutations (`UpdateBasket`) validate but need a session. Login is on
 www.tesco.hu; the storefront attaches an `authorization` header for signed-in users.
-Whether a raw Cookie header is enough for xapi (as it is for the UK) is being verified
-by the maintainer.
+A raw Cookie header imported from the browser is enough for xapi basket operations,
+verified 2026-09-17 (add → read back → remove, totals restored).
 
 **Czechia and Slovakia:** nakup.itesco.cz and potravinydomov.itesco.sk are the same
 platform. A `region: CZ` / `region: SK` config in `src/providers/tesco-hu/api.ts` is

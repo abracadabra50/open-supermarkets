@@ -95,6 +95,7 @@ export function normaliseBasket(data: any, provider: string = TESCO_HU.id): Bask
     total_quantity: totalItems,
     total_cost: Number(view?.totalPrice ?? 0),
     provider,
+    currency: TESCO_HU.currency,
   };
 }
 

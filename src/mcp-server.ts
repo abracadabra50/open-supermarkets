@@ -573,11 +573,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       const formatted = basket.items.map((item, i) =>
-        `${i + 1}. ${item.quantity}x ${item.name}\n   ${money(item.unit_price)} each = ${money(item.total_price)} | ID: ${item.product_uid}`
+        `${i + 1}. ${item.quantity}x ${item.name}\n   ${money(item.unit_price, basket.currency)} each = ${money(item.total_price, basket.currency)} | ID: ${item.product_uid}`
       ).join('\n\n');
 
       return textResult(
-        `${providerName.toUpperCase()} Basket - ${money(basket.total_cost)} (${basket.items.length} items):\n\n${formatted}`
+        `${providerName.toUpperCase()} Basket - ${money(basket.total_cost, basket.currency)} (${basket.items.length} items):\n\n${formatted}`
       );
     }
 

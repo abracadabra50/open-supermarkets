@@ -311,6 +311,7 @@ async function main() {
   await check('normaliseBasket maps splitView items, totals and ids', () => {
     const b = normaliseBasket(BASKET);
     assert.strictEqual(b.provider, 'tesco-hu');
+    assert.strictEqual(b.currency, 'HUF');
     assert.strictEqual(b.total_cost, 252);
     assert.strictEqual(b.total_quantity, 2);
     assert.deepStrictEqual(b.items[0], {

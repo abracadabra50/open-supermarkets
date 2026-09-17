@@ -68,9 +68,8 @@ earliest auth cookie, or after 12 hours when the export carries no expiry.
 
 ## Basket
 
-Basket commands exist but the `basket` capability is only declared in the registry
-once a live round-trip has been verified. Until then the CLI/MCP boundary refuses them
-with `tesco-hu does not support "basket"`. After promotion:
+Basket commands need an imported session (see Authentication). Verified live on
+2026-09-17: add, read back, update and remove all work against the real basket.
 
 ```bash
 supermarket --provider tesco-hu basket
