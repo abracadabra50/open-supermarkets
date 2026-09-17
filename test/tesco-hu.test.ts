@@ -13,6 +13,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { money, sym } from '../src/format';
+import { explain } from '../src/errors';
 import {
   parseCookieHeader,
   normaliseCookieExport,
@@ -354,6 +355,16 @@ async function main() {
     const { provider, updates } = basketProvider();
     await provider.clearBasket();
     assert.deepStrictEqual(updates, [{ tpnc: '205406742', quantity: 0, orderId: 'trn:tesco:order:uuid:test-basket' }]);
+  });
+
+  console.log('\nerror hints');
+
+  await check('a 401 for tesco-hu points at import-session, not at login', () => {
+    const err: any = new Error('Request failed with status code 401');
+    err.response = { status: 401 };
+    const msg = explain(err, { provider: 'tesco-hu', action: 'get basket' });
+    assert.match(msg, /supermarket --provider tesco-hu import-session/);
+    assert.doesNotMatch(msg, /SUPERMARKET_EMAIL/);
   });
 
   process.exit(failures ? 1 : 0);

@@ -59,8 +59,9 @@ export function explain(err: any, opts: ExplainOptions = {}): string {
   if (alreadyExplained(raw)) return raw;
 
   if (status === 401 || status === 403) {
+    const SESSION_IMPORT_PROVIDERS = new Set(['tesco', 'tesco-hu', 'instacart-web']);
     const loginHint =
-      opts.provider === 'tesco' || opts.provider === 'instacart-web'
+      opts.provider && SESSION_IMPORT_PROVIDERS.has(opts.provider)
         ? `Import a browser session — see \`supermarket --provider ${opts.provider} import-session --help\`.`
         : `Log in with \`supermarket login --provider ${who}\`, or set SUPERMARKET_EMAIL and SUPERMARKET_PASSWORD.`;
     return (
