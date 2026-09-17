@@ -93,6 +93,24 @@ export const PROVIDERS: ProviderManifest[] = [
     load: async () => (await import('./mercadona')).MercadonaProvider,
   },
 
+  // ── Hungary ──────────────────────────────────────────────────────────
+  {
+    id: 'tesco-hu',
+    label: 'Tesco Magyarország',
+    country: 'HU',
+    // 'basket' is implemented but deliberately not declared: it needs an
+    // imported browser session and has not yet been verified end-to-end.
+    // Promote it only after a live add/remove round-trip (see the spec).
+    capabilities: ['search'],
+    auth: 'session-cookie',
+    tier: 'community',
+    maintainer: 'benedek',
+    credit:
+      'Same xapi.tesco.com GraphQL backend as the UK provider, selected by region/language headers; ' +
+      'schema differences learned from the storefront\'s server-rendered Apollo cache',
+    load: async () => (await import('./tesco-hu/index')).TescoHuProvider,
+  },
+
   // ── United States ────────────────────────────────────────────────────
   {
     id: 'kroger',

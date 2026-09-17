@@ -62,6 +62,8 @@ check('country filter excludes other countries', () => {
   assert.deepStrictEqual(gb, ['ocado', 'sainsburys', 'tesco']);
   const nl = registry.list({ country: 'NL' }).map((p: any) => p.id);
   assert.deepStrictEqual(nl, ['ah']);
+  const hu = registry.list({ country: 'HU' }).map((p: any) => p.id);
+  assert.deepStrictEqual(hu, ['tesco-hu']);
   assert.deepStrictEqual(loadedProviderModules(), []);
 });
 
