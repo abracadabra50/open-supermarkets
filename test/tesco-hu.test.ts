@@ -25,6 +25,7 @@ import {
   importSessionFromHeader,
 } from '../src/providers/tesco-hu/session';
 import { TescoHuAPI, TescoHuSessionError, TESCO_HU } from '../src/providers/tesco-hu/api';
+import { TescoHuProvider, normaliseProduct, flattenTaxonomy } from '../src/providers/tesco-hu/index';
 
 let failures = 0;
 async function check(name: string, fn: () => void | Promise<void>) {
@@ -201,6 +202,83 @@ async function main() {
     api.setAuthCookies('a=1; b=2');
     assert.strictEqual(api.hasAuthCookies(), true);
     assert.strictEqual((api as any).client.defaults.headers.common['Cookie'], 'a=1; b=2');
+  });
+
+  console.log('\nprovider: catalogue');
+
+  /** Live product fixture, xapi region HU, 2026-09-17. */
+  const BANANA = {
+    id: '205406742', tpnb: '205406742', tpnc: '205406742', gtin: '02870100000000',
+    title: 'Banán lédig', status: 'AvailableForSale', isForSale: true,
+    defaultImageUrl: 'https://digitalcontent.api.tesco.com/v2/media/ghs/a2ffdd5f-77ce-43fe-a45a-527231c49e52/bd9bbd54-0beb-45ca-9661-07b1a5c00d54_1756812688.jpeg?h=225&w=225',
+    bulkBuyLimit: 24, averageWeight: 0.18, productType: 'LooseProduce',
+    superDepartmentName: 'Zöldség és gyümölcs', departmentName: 'Gyümölcsök', aisleName: 'Banán', shelfName: 'Banán',
+    price: { actual: 126, unitPrice: 699, unitOfMeasure: 'kg' },
+    promotions: [],
+    reviews: { stats: { noOfReviews: 12, overallRating: 4.4 } },
+  };
+
+  await check('normaliseProduct maps the live shape into Product with HUF', () => {
+    const p = normaliseProduct(BANANA);
+    assert.strictEqual(p.provider, 'tesco-hu');
+    assert.strictEqual(p.product_uid, '205406742');
+    assert.strictEqual(p.name, 'Banán lédig');
+    assert.strictEqual(p.retail_price.price, 126);
+    assert.deepStrictEqual(p.unit_price, { price: 699, measure: 'kg' });
+    assert.strictEqual(p.currency, 'HUF');
+    assert.strictEqual(p.in_stock, true);
+    assert.strictEqual(p.rating, 4.4);
+    assert.strictEqual(p.review_count, 12);
+    assert.strictEqual(p.description, 'Gyümölcsök / Banán');
+    assert.ok(p.image_url?.startsWith('https://digitalcontent.api.tesco.com/'));
+    assert.strictEqual(p.size, undefined);
+  });
+
+  await check('normaliseProduct: stock follows status, then isForSale; nothing is invented', () => {
+    assert.strictEqual(normaliseProduct({ ...BANANA, status: 'Unavailable' }).in_stock, false);
+    assert.strictEqual(normaliseProduct({ ...BANANA, status: undefined, isForSale: true }).in_stock, true);
+    assert.strictEqual(normaliseProduct({ ...BANANA, status: undefined, isForSale: undefined }).in_stock, false);
+    const bare = normaliseProduct({ id: '1', title: 'x', price: { actual: 10 } });
+    assert.strictEqual(bare.unit_price, undefined);
+    assert.strictEqual(bare.rating, undefined);
+    assert.strictEqual(bare.description, undefined);
+  });
+
+  await check('search converts limit/offset into page/count and normalises results', async () => {
+    const provider = new TescoHuProvider();
+    const calls: any[] = [];
+    (provider.getAPI() as any).search = async (query: string, page: number, count: number) => {
+      calls.push({ query, page, count });
+      return { total: 211, products: [BANANA] };
+    };
+    const first = await provider.search('banán', { limit: 10 });
+    assert.deepStrictEqual(calls[0], { query: 'banán', page: 1, count: 10 });
+    assert.strictEqual(first[0].name, 'Banán lédig');
+    await provider.search('banán', { limit: 10, offset: 20 });
+    assert.deepStrictEqual(calls[1], { query: 'banán', page: 3, count: 10 });
+    await provider.search('banán');
+    assert.deepStrictEqual(calls[2], { query: 'banán', page: 1, count: 24 });
+  });
+
+  await check('getProduct normalises and getCategories flattens with depth and path', async () => {
+    const provider = new TescoHuProvider();
+    (provider.getAPI() as any).getProduct = async () => BANANA;
+    (provider.getAPI() as any).getCategories = async () => [
+      { name: 'Zöldség és gyümölcs', label: 'superDepartment', children: [
+        { id: 'b;dep', name: 'Gyümölcsök', label: 'department', children: [
+          { id: 'b;aisle', name: 'Banán', label: 'aisle' },
+        ] },
+      ] },
+    ];
+    const p = await provider.getProduct('205406742');
+    assert.strictEqual(p.product_uid, '205406742');
+    const cats = await provider.getCategories();
+    assert.deepStrictEqual(cats, [
+      { id: '', name: 'Zöldség és gyümölcs', label: 'superDepartment', depth: 0, path: 'Zöldség és gyümölcs' },
+      { id: 'b;dep', name: 'Gyümölcsök', label: 'department', depth: 1, path: 'Zöldség és gyümölcs > Gyümölcsök' },
+      { id: 'b;aisle', name: 'Banán', label: 'aisle', depth: 2, path: 'Zöldség és gyümölcs > Gyümölcsök > Banán' },
+    ]);
+    assert.deepStrictEqual(flattenTaxonomy([]), []);
   });
 
   process.exit(failures ? 1 : 0);
