@@ -98,10 +98,9 @@ export const PROVIDERS: ProviderManifest[] = [
     id: 'tesco-hu',
     label: 'Tesco Magyarország',
     country: 'HU',
-    // 'basket' is implemented but deliberately not declared: it needs an
-    // imported browser session and has not yet been verified end-to-end.
-    // Promote it only after a live add/remove round-trip (see the spec).
-    capabilities: ['search'],
+    // Basket verified live on 2026-09-17 with an imported browser session
+    // (add one item, read it back, remove it, totals restored).
+    capabilities: ['search', 'basket'],
     auth: 'session-cookie',
     tier: 'community',
     maintainer: 'benedek',

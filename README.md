@@ -167,7 +167,7 @@ checkout needs an account, address and payment method, so it exists for fewer.
 | Kroger *+ Ralphs, Fred Meyer, King Soopers, Harris Teeter, QFC* | 🇺🇸 | ✓ | — | — | — | free API key |
 | Instacart | 🇺🇸 🇨🇦 | ✓ | ✓ | — | via link | partner key |
 | Instacart *(unofficial)* | 🇺🇸 🇨🇦 | ✓ | ✓ | — | — | browser session |
-| Tesco Magyarország | 🇭🇺 | ✓ | — | — | — | browser session (basket only) |
+| Tesco Magyarország | 🇭🇺 | ✓ | ✓ | — | — | browser session (basket only) |
 
 `supermarket providers` prints this live from the registry. The manifest is the source
 of truth rather than a hand-maintained marketing claim.
