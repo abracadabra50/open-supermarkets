@@ -65,6 +65,39 @@ export function normaliseProduct(p: any, provider: string = TESCO_HU.id): Produc
   };
 }
 
+function normaliseBasketItem(item: any): BasketItem {
+  const product = item?.product ?? {};
+  const quantity = Number(item?.quantity ?? 1);
+  const unitPrice = Number(product?.price?.actual ?? 0);
+  const cost = item?.cost;
+  return {
+    item_id: String(item?.id ?? ''),
+    product_uid: String(product?.id ?? product?.tpnb ?? ''),
+    name: String(product?.title ?? 'Unknown item'),
+    quantity,
+    unit_price: unitPrice,
+    total_price: cost !== undefined && cost !== null ? Number(cost) : unitPrice * quantity,
+  };
+}
+
+/** GetBasket → Basket. splitView is an array in the mfe-trolley shape; tolerate an object. */
+export function normaliseBasket(data: any, provider: string = TESCO_HU.id): Basket {
+  const basket = data?.basket ?? data ?? {};
+  const view = Array.isArray(basket?.splitView) ? basket.splitView[0] : basket?.splitView;
+  const items: any[] = view?.items ?? [];
+  const normalised = items.map(normaliseBasketItem);
+  const totalItems =
+    view?.totalItems !== undefined && view?.totalItems !== null
+      ? Number(view.totalItems)
+      : normalised.reduce((s, i) => s + i.quantity, 0);
+  return {
+    items: normalised,
+    total_quantity: totalItems,
+    total_cost: Number(view?.totalPrice ?? 0),
+    provider,
+  };
+}
+
 export class TescoHuProvider implements GroceryProvider {
   readonly name = TESCO_HU.id;
   private api: TescoHuAPI;
@@ -124,5 +157,60 @@ export class TescoHuProvider implements GroceryProvider {
   /** Raise the actionable session error before any network call. */
   protected requireSession(): void {
     if (!this.api.hasAuthCookies()) throw new TescoHuSessionError(sessionHelp(this.name));
+  }
+
+  // ── basket ───────────────────────────────────────────────────────────
+  //
+  // Wired, but NOT declared in the manifest until a live round-trip with an
+  // imported session has been verified (see the spec's capability promotion rule).
+
+  async getBasket(): Promise<Basket> {
+    this.requireSession();
+    return normaliseBasket(await this.api.getBasket(), this.name);
+  }
+
+  /** The basket's own id doubles as the orderId that UpdateBasket needs. */
+  private async getBasketOrderId(): Promise<string> {
+    const data = await this.api.getBasket();
+    const orderId = data?.basket?.id ?? data?.id;
+    if (!orderId) throw new Error(`${this.name}: could not read the basket id — is the session valid?`);
+    return String(orderId);
+  }
+
+  /**
+   * UpdateBasket takes the product id, but `remove`/`update` are documented to
+   * take the basket line id like every other provider. Resolve either against
+   * the live basket; an unknown id is passed through as a product id.
+   */
+  private async resolveProductUid(itemOrProductId: string): Promise<string> {
+    const basket = normaliseBasket(await this.api.getBasket(), this.name);
+    const match = basket.items.find(i => i.item_id === itemOrProductId || i.product_uid === itemOrProductId);
+    return match?.product_uid ?? itemOrProductId;
+  }
+
+  async addToBasket(productId: string, quantity: number): Promise<void> {
+    this.requireSession();
+    const orderId = await this.getBasketOrderId();
+    await this.api.updateBasket(productId, quantity, orderId);
+  }
+
+  async updateBasketItem(itemId: string, quantity: number): Promise<void> {
+    this.requireSession();
+    const productUid = await this.resolveProductUid(itemId);
+    const orderId = await this.getBasketOrderId();
+    await this.api.updateBasket(productUid, quantity, orderId);
+  }
+
+  async removeFromBasket(itemId: string): Promise<void> {
+    await this.updateBasketItem(itemId, 0);
+  }
+
+  async clearBasket(): Promise<void> {
+    this.requireSession();
+    const basket = normaliseBasket(await this.api.getBasket(), this.name);
+    const orderId = await this.getBasketOrderId();
+    for (const item of basket.items) {
+      await this.api.updateBasket(item.product_uid, 0, orderId);
+    }
   }
 }

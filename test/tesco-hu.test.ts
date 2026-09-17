@@ -25,7 +25,7 @@ import {
   importSessionFromHeader,
 } from '../src/providers/tesco-hu/session';
 import { TescoHuAPI, TescoHuSessionError, TESCO_HU } from '../src/providers/tesco-hu/api';
-import { TescoHuProvider, normaliseProduct, flattenTaxonomy } from '../src/providers/tesco-hu/index';
+import { TescoHuProvider, normaliseProduct, normaliseBasket, flattenTaxonomy } from '../src/providers/tesco-hu/index';
 
 let failures = 0;
 async function check(name: string, fn: () => void | Promise<void>) {
@@ -279,6 +279,81 @@ async function main() {
       { id: 'b;aisle', name: 'Banán', label: 'aisle', depth: 2, path: 'Zöldség és gyümölcs > Gyümölcsök > Banán' },
     ]);
     assert.deepStrictEqual(flattenTaxonomy([]), []);
+  });
+
+  console.log('\nprovider: basket');
+
+  /** Shape of GetBasket, from the UK provider's confirmed query; HU validates the same fields. */
+  const BASKET = {
+    basket: {
+      id: 'trn:tesco:order:uuid:test-basket',
+      splitView: [{
+        id: 'view-1', totalPrice: 252, guidePrice: 252, totalItems: 2,
+        items: [{
+          id: 'line-1', quantity: 2, cost: 252, unit: 'pcs',
+          product: { id: '205406742', tpnb: '205406742', gtin: '02870100000000', title: 'Banán lédig', price: { actual: 126, unitPrice: 699, unitOfMeasure: 'kg' } },
+        }],
+      }],
+    },
+  };
+
+  function basketProvider() {
+    const provider = new TescoHuProvider();
+    const api: any = provider.getAPI();
+    api.setAuthCookies('session=test');
+    const updates: any[] = [];
+    api.getBasket = async () => BASKET;
+    api.updateBasket = async (tpnc: string, quantity: number, orderId: string) => { updates.push({ tpnc, quantity, orderId }); return BASKET; };
+    return { provider, updates };
+  }
+
+  await check('normaliseBasket maps splitView items, totals and ids', () => {
+    const b = normaliseBasket(BASKET);
+    assert.strictEqual(b.provider, 'tesco-hu');
+    assert.strictEqual(b.total_cost, 252);
+    assert.strictEqual(b.total_quantity, 2);
+    assert.deepStrictEqual(b.items[0], {
+      item_id: 'line-1', product_uid: '205406742', name: 'Banán lédig', quantity: 2, unit_price: 126, total_price: 252,
+    });
+    // splitView may also arrive as a single object rather than an array
+    const single = normaliseBasket({ basket: { ...BASKET.basket, splitView: BASKET.basket.splitView[0] } });
+    assert.strictEqual(single.items.length, 1);
+    // total_price falls back to unit_price * quantity when cost is absent
+    const noCost = normaliseBasket({ basket: { splitView: [{ items: [{ id: 'l', quantity: 3, product: { id: 'p', title: 't', price: { actual: 10 } } }] }] } });
+    assert.strictEqual(noCost.items[0].total_price, 30);
+    assert.strictEqual(noCost.total_quantity, 3);
+  });
+
+  await check('basket methods raise the session error before any network call when no cookies', async () => {
+    const provider = new TescoHuProvider();
+    const api: any = provider.getAPI();
+    api.setAuthCookies('');
+    let called = false;
+    api.getBasket = async () => { called = true; return BASKET; };
+    await assert.rejects(provider.getBasket(), /import-session/);
+    await assert.rejects(provider.addToBasket('205406742', 1), /import-session/);
+    assert.strictEqual(called, false);
+    assert.strictEqual(await provider.isAuthenticated(), false);
+  });
+
+  await check('addToBasket sends UpdateBasket with the basket id as orderId', async () => {
+    const { provider, updates } = basketProvider();
+    await provider.addToBasket('120502935', 3);
+    assert.deepStrictEqual(updates, [{ tpnc: '120502935', quantity: 3, orderId: 'trn:tesco:order:uuid:test-basket' }]);
+  });
+
+  await check('update/remove accept either the line id or the product id', async () => {
+    const { provider, updates } = basketProvider();
+    await provider.updateBasketItem('line-1', 5);
+    await provider.removeFromBasket('205406742');
+    await provider.removeFromBasket('unknown-id');
+    assert.deepStrictEqual(updates.map(u => [u.tpnc, u.quantity]), [['205406742', 5], ['205406742', 0], ['unknown-id', 0]]);
+  });
+
+  await check('clearBasket removes every line', async () => {
+    const { provider, updates } = basketProvider();
+    await provider.clearBasket();
+    assert.deepStrictEqual(updates, [{ tpnc: '205406742', quantity: 0, orderId: 'trn:tesco:order:uuid:test-basket' }]);
   });
 
   process.exit(failures ? 1 : 0);
