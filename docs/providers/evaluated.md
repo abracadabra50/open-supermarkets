@@ -18,6 +18,8 @@ is a reason to re-probe, not a reason to stop.
 | Walmart | US | blocked | consumer GraphQL returns HTTP 418 (bot detection) |
 | Tesco Ireland | IE | needs work | not a header switch; xapi rejects with "Invalid Client" |
 | ~~Mercadona~~ | ES | **BUILT** | Algolia key found in the frontend bundle — see src/providers/mercadona.ts |
+| ~~Tesco Hungary~~ | HU | **BUILT** | same xapi as the UK, selected by `region: HU` — see src/providers/tesco-hu/ |
+| Tesco Czechia / Slovakia | CZ / SK | likely viable | same platform as Hungary; unverified, needs someone who can test |
 
 ---
 
@@ -203,3 +205,25 @@ shopper-facing product API.
 **If you want more US coverage, Kroger's banner family is the leverage**, not a new
 chain: Ralphs, Fred Meyer, King Soopers, Harris Teeter, Smith's, QFC and Food4Less all
 sit behind the credentials you already have.
+
+## Tesco Hungary (bevasarlas.tesco.hu) — BUILT, 2026-09-17
+
+The storefront is Akamai-fronted (403 to anything that is not a browser), but its
+page config points at `https://xapi.tesco.com/` with the UK's public `mangoApiKey`,
+`region: hu`, `language: hu-HU`. xapi accepts plain HTTP with `region: HU` and returns
+the Hungarian catalogue: `product(tpnc: "205406742")` is "Banán lédig" here and
+`product-not-found` with `region: UK`.
+
+The Tesco Ireland note above ("Invalid Client") did not reproduce for Hungary — the
+same key works. Schema differs from the UK (`status`/`isForSale`/`price.unitPrice`
+instead of `isAvailable`/`displayPrice`/`unitPrice`); introspection is disabled, so
+field names came from the storefront's server-rendered Apollo cache.
+
+Basket mutations (`UpdateBasket`) validate but need a session. Login is on
+www.tesco.hu; the storefront attaches an `authorization` header for signed-in users.
+Whether a raw Cookie header is enough for xapi (as it is for the UK) is being verified
+by the maintainer.
+
+**Czechia and Slovakia:** nakup.itesco.cz and potravinydomov.itesco.sk are the same
+platform. A `region: CZ` / `region: SK` config in `src/providers/tesco-hu/api.ts` is
+the obvious probe; nobody has run it yet.

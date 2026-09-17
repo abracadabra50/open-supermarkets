@@ -1,13 +1,13 @@
 ---
 name: open-supermarkets
-description: "Grocery automation across nine retailers in five countries — UK, Netherlands, Belgium, Spain and the US. Search, compare, basket, delivery slots and checkout, plus Open Food Facts nutrition and allergen enrichment. Available as CLI, MCP server, or agent skill."
+description: "Grocery automation across ten retailers in seven countries — UK, Netherlands, Belgium, Spain, Hungary, the US and Canada. Search, compare, basket, delivery slots and checkout, plus Open Food Facts nutrition and allergen enrichment. Available as CLI, MCP server, or agent skill."
 license: MIT
 compatibility: Node.js 18+, TypeScript. Playwright only for browser-auth providers. Delivery areas vary by retailer.
 metadata:
   author: zish
   version: "3.0.0"
   repository: https://github.com/abracadabra50/open-supermarkets
-  tags: [groceries, supermarket, sainsburys, ocado, tesco, albert-heijn, mercadona, kroger, instacart, uk, netherlands, belgium, spain, usa, shopping, automation, mcp, agent-tool]
+  tags: [groceries, supermarket, sainsburys, ocado, tesco, tesco-hu, hungary, albert-heijn, mercadona, kroger, instacart, uk, netherlands, belgium, spain, usa, shopping, automation, mcp, agent-tool]
 allowed-tools: Bash({baseDir}/node:*), Bash(supermarket:*), Bash(npm:run:supermarket:*)
 ---
 
@@ -28,6 +28,7 @@ Each supermarket has a dedicated skill file with provider-specific commands, aut
 | **Sainsbury's** | [`skills/sainsburys.md`](skills/sainsburys.md) | Full coverage |
 | **Tesco** | [`skills/tesco.md`](skills/tesco.md) | Full coverage + staples |
 | **Ocado** | [`skills/ocado.md`](skills/ocado.md) | Full coverage except slot booking/checkout (AWS WAF) |
+| **Tesco Magyarország** | [`skills/tesco-hu.md`](skills/tesco-hu.md) | Search; basket pending live verification |
 
 ---
 
