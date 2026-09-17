@@ -16,7 +16,15 @@ const CURRENCY_SYMBOLS: Record<string, string> = {
   PLN: 'zł',
   SEK: 'kr',
   CHF: 'CHF ',
+  HUF: 'Ft',
 };
+
+/**
+ * Currencies conventionally written as a whole number followed by the symbol,
+ * e.g. "126 Ft". Forint has no sub-unit in use, so "Ft126.00" reads as wrong to
+ * anyone who has shopped in Hungary.
+ */
+const WHOLE_NUMBER_SUFFIX = new Set(['HUF']);
 
 /**
  * Symbol for a currency code, falling back to the code itself so an unmapped
@@ -29,5 +37,10 @@ export function sym(currency?: string): string {
 
 /** Format an amount as a price: two decimals, correct symbol. */
 export function money(amount: number, currency?: string): string {
-  return `${sym(currency)}${Number(amount ?? 0).toFixed(2)}`;
+  const code = currency ?? 'GBP';
+  const value = Number(amount ?? 0);
+  if (WHOLE_NUMBER_SUFFIX.has(code)) {
+    return `${Math.round(value)} ${sym(code)}`;
+  }
+  return `${sym(code)}${value.toFixed(2)}`;
 }
