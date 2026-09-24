@@ -11,7 +11,8 @@ export interface Product {
     measure: string;
     price: number;
   };
-  in_stock: boolean;
+  /** Unknown when the retailer supplies no reliable stock signal. */
+  in_stock: boolean | null;
   image_url?: string;
   provider: string; // sainsburys, ocado, tesco, etc.
   /**

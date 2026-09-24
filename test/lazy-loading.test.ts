@@ -244,21 +244,19 @@ console.log('\nerror translation');
 // ─────────────────────────────────────────────────────────────────────
 // Registry / factory parity.
 //
-// Every manifest entry must be constructible through BOTH paths — the async
-// createProvider() and the legacy synchronous ProviderFactory that `--provider`
-// still uses. They drifted: ah, instacart and instacart-web were in the registry
-// and reachable via --country, but `--provider ah` threw "cannot be created
-// synchronously". The international providers were effectively unreachable by
-// the flag most people would type.
+// Existing providers must retain their legacy synchronous constructor.
+// New search-only providers use createProvider() through CLI, HTTP, and MCP
+// search routes. Lidl must not be cast to a full basket/checkout provider.
 // ─────────────────────────────────────────────────────────────────────
 console.log('\nregistry/factory parity');
 
 {
   const { PROVIDERS, ProviderFactory } = require('../src/providers');
 
-  check('every manifest entry has a synchronous constructor', () => {
+  check('existing manifest entries retain synchronous constructors', () => {
     const broken: string[] = [];
     for (const m of PROVIDERS) {
+      if (m.id === 'lidl-ie') continue; // search-only via async search routes
       try {
         ProviderFactory.create(m.id);
       } catch (err: any) {
@@ -338,6 +336,10 @@ console.log('\nbatch');
     assert.deepStrictEqual(Object.keys(l).sort(),
       ['currency', 'id', 'inStock', 'name', 'price', 'size', 'unit']);
     assert.strictEqual(l.unit, '0.6/ltr');
+    assert.strictEqual(lean({
+      product_uid: 'unknown', name: 'Milk', retail_price: { price: 1.2 },
+      in_stock: null, provider: 'lidl-ie', currency: 'EUR',
+    }).inStock, null, 'batch candidates must preserve unknown stock');
   });
 
   // One bad ingredient must not cost you the other twenty-nine.
