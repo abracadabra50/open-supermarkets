@@ -92,6 +92,17 @@ export const PROVIDERS: ProviderManifest[] = [
     credit: 'Open REST catalogue + the storefront\'s public Algolia search key',
     load: async () => (await import('./mercadona')).MercadonaProvider,
   },
+  {
+    id: 'ahorramas',
+    label: 'Ahorramás',
+    country: 'ES',
+    capabilities: ['search', 'basket'],
+    auth: 'anonymous',
+    tier: 'community',
+    maintainer: 'abracadabra50',
+    credit: 'Salesforce Commerce Cloud storefront HTTP protocol discovered from the public site',
+    load: async () => (await import('./ahorramas')).AhorramasProvider,
+  },
 
   // ── Hungary ──────────────────────────────────────────────────────────
   {
