@@ -32,10 +32,10 @@ const server = new Server(
   }
 );
 
-const PROVIDERS: ProviderName[] = ['sainsburys', 'ocado', 'tesco', 'tesco-hu'];
+const PROVIDERS: ProviderName[] = ['sainsburys', 'ocado', 'tesco', 'tesco-hu', 'migros'];
 
 // Session directories per provider
-const SESSION_PATHS: Record<ProviderName, string> = {
+const SESSION_PATHS: Partial<Record<ProviderName, string>> = {
   sainsburys: `${os.homedir()}/.sainsburys/session.json`,
   ocado: `${os.homedir()}/.ocado/session.json`,
   tesco: `${os.homedir()}/.tesco/session.json`,
@@ -43,10 +43,11 @@ const SESSION_PATHS: Record<ProviderName, string> = {
 };
 
 /** Providers whose catalogue search works with no session at all. */
-const ANONYMOUS_SEARCH = new Set<ProviderName>(['tesco-hu']);
+const ANONYMOUS_SEARCH = new Set<ProviderName>(['tesco-hu', 'migros']);
 
 function isLoggedIn(provider: ProviderName): boolean {
-  return fs.existsSync(SESSION_PATHS[provider]);
+  const sessionPath = SESSION_PATHS[provider];
+  return Boolean(sessionPath && fs.existsSync(sessionPath));
 }
 
 function requireLogin(provider: ProviderName): string | null {
@@ -69,7 +70,7 @@ function textResult(text: string, isError = false) {
 
 // ─── Tool definitions ────────────────────────────────────────────
 
-const providerEnum = { type: 'string', enum: PROVIDERS, description: 'Supermarket provider: sainsburys, ocado, tesco, or tesco-hu (Hungary)' };
+const providerEnum = { type: 'string', enum: PROVIDERS, description: 'Supermarket provider: sainsburys, ocado, tesco, tesco-hu (Hungary), or migros (Switzerland)' };
 
 server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
