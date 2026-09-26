@@ -22,13 +22,30 @@ export class AhorramasHttpError extends Error {
   readonly path: string;
 
   constructor(method: string, path: string, status?: number, cause?: unknown) {
-    super(`Ahorramás ${method} ${path} failed${status ? ` (HTTP ${status})` : ''}`);
+    const detail = safeErrorDetail(cause);
+    super(`Ahorramás ${method} ${path} failed${status ? ` (HTTP ${status})` : ''}${detail ? `: ${detail}` : ''}`);
     this.name = 'AhorramasHttpError';
     this.status = status;
     this.method = method;
     this.path = path;
     if (cause) (this as any).cause = cause;
   }
+}
+
+export class AhorramasParseError extends Error {
+  constructor(message: string) {
+    super(`Ahorramás cart response could not be parsed: ${message}`);
+    this.name = 'AhorramasParseError';
+  }
+}
+
+function safeErrorDetail(error: any): string {
+  const value = error?.response?.data;
+  const detail = typeof value === 'string'
+    ? value
+    : value?.error ?? value?.errorMessage ?? value?.message;
+  if (typeof detail !== 'string' || !detail.trim()) return '';
+  return detail.replace(/((?:sid|dwsid|dwanonymous_[^=;\s]*|dwac_[^=;\s]*))=[^;\s]+/gi, '$1=[redacted]').slice(0, 240);
 }
 
 /** Parse Spanish/euro prices without changing the process locale. */
@@ -124,7 +141,7 @@ export function parseAhorramasCartHtml(html: string): any {
   if (state) {
     try { return JSON.parse(state[1].replace(/&quot;/g, '"')); } catch { /* continue */ }
   }
-  return { items: [], totals: {} };
+  throw new AhorramasParseError('no basket state was found in the SSR document');
 }
 
 export function parseAhorramasSearchHtml(html: string, provider = 'ahorramas'): Product[] {
@@ -157,9 +174,6 @@ export class AhorramasProvider implements GroceryProvider {
   constructor(http?: AxiosInstance) {
     this.http = http ?? axios.create({ baseURL: AHORRAMAS_BASE, timeout: 15_000, headers: { Accept: 'application/json, text/html', 'User-Agent': 'open-supermarkets' } });
   }
-
-  /** Useful for deterministic tests; cookie values are never returned. */
-  getHttp(): AxiosInstance { return this.http; }
 
   private captureCookies(headers: any): void {
     const values = headers?.['set-cookie'] ?? headers?.['Set-Cookie'];
