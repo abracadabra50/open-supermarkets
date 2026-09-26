@@ -4,7 +4,7 @@
 
 ### The open-source grocery interface for humans and AI agents
 
-**Search live products and prices, compare retailers, build baskets and check out safely<br>across ten providers in seven countries.**
+**Search live products and prices, compare retailers, build baskets and check out safely<br>across eleven providers in seven countries.**
 
 **CLI · HTTP API · MCP · Agent Skills**
 
@@ -13,7 +13,7 @@
 [![npm](https://img.shields.io/npm/v/open-supermarkets?color=CB3837&logo=npm&logoColor=white)](https://www.npmjs.com/package/open-supermarkets)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 [![Countries](https://img.shields.io/badge/countries-7-2ea44f)](#what-works-where)
-[![Providers](https://img.shields.io/badge/providers-10-2ea44f)](#what-works-where)
+[![Providers](https://img.shields.io/badge/providers-11-2ea44f)](#what-works-where)
 [![No credentials](https://img.shields.io/badge/3%20countries-no%20credentials-orange)](#what-works-where)
 [![CI](https://github.com/abracadabra50/open-supermarkets/actions/workflows/ci.yml/badge.svg)](https://github.com/abracadabra50/open-supermarkets/actions/workflows/ci.yml)
 [![MCP](https://img.shields.io/badge/MCP-22%20tools-6E56CF)](#connect-an-agent)
@@ -164,6 +164,7 @@ checkout needs an account, address and payment method, so it exists for fewer.
 | Albert Heijn | 🇳🇱 | ✓ | — | — | — | **none** |
 | Albert Heijn België | 🇧🇪 | ✓ | — | — | — | **none** |
 | Mercadona | 🇪🇸 | ✓ | — | — | — | **none** |
+| AhorraMás | 🇪🇸 | ✓ | — | — | — | **none** |
 | Kroger *+ Ralphs, Fred Meyer, King Soopers, Harris Teeter, QFC* | 🇺🇸 | ✓ | — | — | — | free API key |
 | Instacart | 🇺🇸 🇨🇦 | ✓ | ✓ | — | via link | partner key |
 | Instacart *(unofficial)* | 🇺🇸 🇨🇦 | ✓ | ✓ | — | — | browser session |
@@ -248,6 +249,10 @@ Never rely on it as medical or allergy advice. Check the product packaging.
 
 This project gets more useful when people add the supermarket they can actually test.
 A search-only provider can be one file plus one manifest entry.
+
+**AhorraMás — Spain — search.** Search requires no credentials and reads the
+anonymous Salesforce Commerce Cloud storefront. Availability can depend on the
+selected location; basket operations are not supported yet.
 
 Before starting, read [`docs/providers/evaluated.md`](docs/providers/evaluated.md). It
 records providers already investigated, what worked, what failed and when. That avoids
