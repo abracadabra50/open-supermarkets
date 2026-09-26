@@ -19,9 +19,9 @@ npm run groc -- --provider migros search "bread" --json
 
 Migros blocks cold HTTP requests with Cloudflare. The provider therefore starts a
 headless Chromium context and calls Migros's JSON endpoints from the live page context.
-The browser remains alive for the provider instance and is closed by `logout()`/`close()`
-or when a search fails. Browser cookies are not currently sufficient for replaying the
-same requests through Axios after the browser closes.
+The browser remains alive for the complete search and is closed automatically afterwards
+or by `logout()`/`close()`. Browser cookies are not currently sufficient for replaying
+the same requests through Axios after the browser closes.
 
 The provider implements catalogue search only. Basket, delivery slots and checkout are
 not declared capabilities.

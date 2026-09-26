@@ -178,7 +178,8 @@ to one does not. The manifest therefore does not claim those capabilities.
 
 Migros catalogue search runs inside a live Chromium context because cold HTTP requests
 are blocked by Cloudflare. The provider calls Migros's JSON search API from that browser
-context; browser cookies are not currently reusable by Axios after the browser closes.
+context, then closes the browser after the search; browser cookies are not currently
+reusable by Axios after the browser closes.
 
 ---
 

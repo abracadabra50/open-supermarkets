@@ -181,7 +181,8 @@ export class MigrosSession implements MigrosSearchSession {
         }
       } catch (error) {
         await this.close();
-        throw error;
+        if (error instanceof MigrosError) throw error;
+        throw new MigrosError(`Migros browser session failed: ${(error as Error).message}`);
       } finally {
         this.initialising = undefined;
       }
@@ -198,12 +199,16 @@ export class MigrosSession implements MigrosSearchSession {
       candidate => candidate.url() === `${BASE_URL}${SEARCH_PATH}`,
       { timeout: REQUEST_TIMEOUT }
     );
-    await Promise.all([
-      request.then(candidate => {
-        this.leshopHeader = candidate.headers().leshopch;
-      }),
-      this.page.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout: REQUEST_TIMEOUT }),
-    ]);
+    try {
+      await Promise.all([
+        request.then(candidate => {
+          this.leshopHeader = candidate.headers().leshopch;
+        }),
+        this.page.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout: REQUEST_TIMEOUT }),
+      ]);
+    } catch (error) {
+      throw new MigrosError(`Migros search page failed: ${(error as Error).message}`);
+    }
 
     if (!this.leshopHeader) {
       throw new MigrosError('Migros did not provide the required browser session header.');
@@ -220,33 +225,38 @@ export class MigrosSession implements MigrosSearchSession {
       throw new MigrosError('Migros browser session is not ready.');
     }
 
-    const result = await this.page.evaluate(
-      async ({ url, method: requestMethod, body: requestBody, leshopHeader }) => {
-        const response = await fetch(url, {
-          method: requestMethod,
-          credentials: 'include',
-          headers: {
-            Accept: 'application/json, text/plain, */*',
-            ...(requestMethod === 'POST' ? { 'Content-Type': 'application/json' } : {}),
-            ...(leshopHeader ? { leshopch: leshopHeader } : {}),
-            'migros-language': 'en',
-            'peer-id': 'website-js-1265.0.0',
-          },
-          body: requestBody === undefined ? undefined : JSON.stringify(requestBody),
-        });
-        return {
-          status: response.status,
-          contentType: response.headers.get('content-type'),
-          body: await response.text(),
-        };
-      },
-      {
-        url: `${BASE_URL}${path}`,
-        method,
-        body,
-        leshopHeader: this.leshopHeader,
-      }
-    );
+    let result: PageJsonResult;
+    try {
+      result = await this.page.evaluate(
+        async ({ url, method: requestMethod, body: requestBody, leshopHeader }) => {
+          const response = await fetch(url, {
+            method: requestMethod,
+            credentials: 'include',
+            headers: {
+              Accept: 'application/json, text/plain, */*',
+              ...(requestMethod === 'POST' ? { 'Content-Type': 'application/json' } : {}),
+              ...(leshopHeader ? { leshopch: leshopHeader } : {}),
+              'migros-language': 'en',
+              'peer-id': 'website-js-1265.0.0',
+            },
+            body: requestBody === undefined ? undefined : JSON.stringify(requestBody),
+          });
+          return {
+            status: response.status,
+            contentType: response.headers.get('content-type'),
+            body: await response.text(),
+          };
+        },
+        {
+          url: `${BASE_URL}${path}`,
+          method,
+          body,
+          leshopHeader: this.leshopHeader,
+        }
+      );
+    } catch (error) {
+      throw new MigrosError(`Migros ${label} browser request failed: ${(error as Error).message}`);
+    }
 
     return assertResponse(result, label);
   }
@@ -302,9 +312,11 @@ export class MigrosSession implements MigrosSearchSession {
         throw new MigrosError('Migros product-card response has an unexpected schema.');
       }
       return cards.map(card => normaliseProduct(card));
-    } catch (error) {
+    } finally {
+      // CLI and MCP callers create a provider per operation and do not have a
+      // universal disposal hook. Keep Chromium alive for the complete search,
+      // then close every resource on both success and failure.
       await this.close();
-      throw error;
     }
   }
 
