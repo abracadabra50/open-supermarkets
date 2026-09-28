@@ -118,7 +118,7 @@ export const PROVIDERS: ProviderManifest[] = [
     // Migros search is public inside a live browser context, but cold HTTP
     // requests are Cloudflare-blocked. The provider keeps Chromium alive.
     capabilities: ['search', 'basket'],
-    auth: 'session-cookie',
+    auth: 'anonymous',
     tier: 'community',
     maintainer: 'vgvr0',
     credit: 'Migros storefront JSON endpoints, verified live on 2026-09-26',
