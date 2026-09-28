@@ -117,7 +117,7 @@ export const PROVIDERS: ProviderManifest[] = [
     country: 'CH',
     // Migros search is public inside a live browser context, but cold HTTP
     // requests are Cloudflare-blocked. The provider keeps Chromium alive.
-    capabilities: ['search'],
+    capabilities: ['search', 'basket'],
     auth: 'session-cookie',
     tier: 'community',
     maintainer: 'vgvr0',

@@ -10,7 +10,7 @@
 
 import { chromium } from 'playwright';
 import type { Browser, BrowserContext, LaunchOptions, Page } from 'playwright';
-import type { GroceryProvider, Product, SearchOptions } from './types';
+import type { Basket, BasketItem, GroceryProvider, Product, SearchOptions } from './types';
 
 export const MIGROS = {
   id: 'migros',
@@ -22,6 +22,10 @@ export const MIGROS = {
 const BASE_URL = 'https://www.migros.ch';
 const HOME_PATH = '/en';
 const GUEST_PATH = '/authentication/public/v1/api/guest?authorizationNotRequired=true';
+const BASKET_OVERVIEW_PATH = '/shopping-list/public/v1/lists/overview';
+const BASKET_DETAILS_PATH = '/shopping-list/public/v2/list/details';
+const BASKET_ITEMS_PATH = '/shopping-list/public/v3/items';
+const FULFILMENT_PATH = '/fulfilment-selector/public/v1/fulfilment-selection';
 const SEARCH_PATH = '/product-display/public/v2/products/search';
 const CARDS_PATH = '/product-display/public/v4/product-cards';
 const DEFAULT_LIMIT = 10;
@@ -62,6 +66,46 @@ interface MigrosProductCard {
   offer?: { price?: MigrosPrice };
 }
 
+interface MigrosBasketItem {
+  id: number | string;
+  name?: string;
+  quantity: number;
+  type: string;
+}
+
+interface MigrosBasketResponse {
+  categories: Array<{ items?: MigrosBasketItem[] }>;
+  shoppingListId: number | string;
+  totals: {
+    onlineTotal: { estimatedTotal: number };
+  };
+}
+
+export function normaliseBasket(
+  details: MigrosBasketResponse,
+  prices: Map<string, number> = new Map()
+): Basket {
+  const items = details.categories.flatMap(category => category.items ?? []);
+  const basketItems: BasketItem[] = items.map(item => {
+    const unitPrice = prices.get(String(item.id)) ?? 0;
+    return {
+      item_id: String(item.id),
+      product_uid: String(item.id),
+      name: item.name ?? String(item.id),
+      quantity: item.quantity,
+      unit_price: unitPrice,
+      total_price: unitPrice * item.quantity,
+    };
+  });
+  return {
+    items: basketItems,
+    total_quantity: basketItems.reduce((sum, item) => sum + item.quantity, 0),
+    total_cost: details.totals.onlineTotal.estimatedTotal,
+    provider: MIGROS.id,
+    currency: MIGROS.currency,
+  };
+}
+
 interface PageJsonResult {
   status: number;
   contentType: string | null;
@@ -80,6 +124,11 @@ export class MigrosError extends Error {
 
 export interface MigrosSearchSession {
   search(query: string, options?: SearchOptions): Promise<Product[]>;
+  getBasket(): Promise<Basket>;
+  addToBasket(productId: string, quantity: number): Promise<void>;
+  updateBasketItem(itemId: string, quantity: number): Promise<void>;
+  removeFromBasket(itemId: string): Promise<void>;
+  clearBasket(): Promise<void>;
   close(): Promise<void>;
 }
 
@@ -111,6 +160,40 @@ function assertResponse(result: PageJsonResult, label: string): any {
     throw new MigrosError(`Migros ${label} failed (HTTP ${result.status})`, result.status);
   }
   return parseJson(result.body, label, result.status, result.contentType);
+}
+
+function assertBasketResponse(value: unknown): MigrosBasketResponse {
+  if (!value || typeof value !== 'object') {
+    throw new MigrosError('Migros basket response has an unexpected schema.');
+  }
+  const basket = value as Partial<MigrosBasketResponse>;
+  if (
+    !Array.isArray(basket.categories) ||
+    (typeof basket.shoppingListId !== 'string' && typeof basket.shoppingListId !== 'number') ||
+    !basket.totals ||
+    typeof basket.totals !== 'object' ||
+    !basket.totals.onlineTotal ||
+    typeof basket.totals.onlineTotal.estimatedTotal !== 'number'
+  ) {
+    throw new MigrosError('Migros basket response has an unexpected schema.');
+  }
+  for (const category of basket.categories) {
+    if (!category || typeof category !== 'object' || (category.items !== undefined && !Array.isArray(category.items))) {
+      throw new MigrosError('Migros basket response has an unexpected schema.');
+    }
+    for (const item of category.items ?? []) {
+      if (
+        !item ||
+        typeof item !== 'object' ||
+        (typeof item.id !== 'string' && typeof item.id !== 'number') ||
+        typeof item.quantity !== 'number' ||
+        typeof item.type !== 'string'
+      ) {
+        throw new MigrosError('Migros basket response has an unexpected schema.');
+      }
+    }
+  }
+  return basket as MigrosBasketResponse;
 }
 
 function numberOrUndefined(value: unknown): number | undefined {
@@ -217,7 +300,7 @@ export class MigrosSession implements MigrosSearchSession {
 
   private async fetchJson(
     path: string,
-    method: 'GET' | 'POST',
+    method: 'GET' | 'POST' | 'PUT',
     body: unknown,
     label: string
   ): Promise<any> {
@@ -234,7 +317,7 @@ export class MigrosSession implements MigrosSearchSession {
             credentials: 'include',
             headers: {
               Accept: 'application/json, text/plain, */*',
-              ...(requestMethod === 'POST' ? { 'Content-Type': 'application/json' } : {}),
+              ...(requestMethod !== 'GET' ? { 'Content-Type': 'application/json' } : {}),
               ...(leshopHeader ? { leshopch: leshopHeader } : {}),
               'migros-language': 'en',
               'peer-id': 'website-js-1265.0.0',
@@ -259,6 +342,108 @@ export class MigrosSession implements MigrosSearchSession {
     }
 
     return assertResponse(result, label);
+  }
+
+  private async ensureBasketSession(): Promise<void> {
+    await this.initialise();
+    if (!this.leshopHeader) await this.captureSessionHeader('basket');
+  }
+
+  private async shoppingListId(): Promise<string | number> {
+    const overview = await this.fetchJson(BASKET_OVERVIEW_PATH, 'GET', undefined, 'basket overview');
+    if (
+      !Array.isArray(overview) ||
+      !overview[0] ||
+      (typeof overview[0].shoppingListId !== 'string' && typeof overview[0].shoppingListId !== 'number')
+    ) {
+      throw new MigrosError('Migros basket overview has an unexpected schema.');
+    }
+    return overview[0].shoppingListId;
+  }
+
+  private async setBasketItem(productId: string, quantity: number, type: string): Promise<void> {
+    if (!Number.isFinite(quantity) || quantity < 0) {
+      throw new MigrosError('Migros basket quantity must be a non-negative number.');
+    }
+    await this.ensureBasketSession();
+    const shoppingListId = await this.shoppingListId();
+    assertBasketResponse(
+      await this.fetchJson(
+        BASKET_ITEMS_PATH,
+        'PUT',
+        { shoppingListId, items: [{ id: productId, quantity, type }] },
+        'basket update'
+      )
+    );
+  }
+
+  private async basketDetails(): Promise<MigrosBasketResponse> {
+    await this.ensureBasketSession();
+    const shoppingListId = await this.shoppingListId();
+    const details = await this.fetchJson(
+      `${BASKET_DETAILS_PATH}?shoppingListId=${encodeURIComponent(String(shoppingListId))}`,
+      'GET',
+      undefined,
+      'basket details'
+    );
+    return assertBasketResponse(details);
+  }
+
+  async getBasket(): Promise<Basket> {
+    const details = await this.basketDetails();
+    const items = details.categories.flatMap(category => category.items ?? []);
+    const numericIds = items
+      .map(item => Number(item.id))
+      .filter(Number.isFinite);
+    const prices = new Map<string, number>();
+
+    if (numericIds.length) {
+      const fulfilment = await this.fetchJson(FULFILMENT_PATH, 'GET', undefined, 'fulfilment selection');
+      const warehouseId = fulfilment && typeof fulfilment.warehouseId === 'number' ? fulfilment.warehouseId : undefined;
+      const cards = await this.fetchJson(
+        CARDS_PATH,
+        'POST',
+        {
+          offerFilter: {
+            storeType: 'ONLINE',
+            ...(warehouseId === undefined ? {} : { warehouseId }),
+            ongoingOfferDate: `${new Date().toISOString().slice(0, 10)}T00:00:00`,
+          },
+          productFilter: { uids: numericIds },
+        },
+        'basket product cards'
+      );
+      if (!Array.isArray(cards)) throw new MigrosError('Migros basket product cards have an unexpected schema.');
+      for (const card of cards as MigrosProductCard[]) {
+        const uid = String(card.migrosId ?? card.migrosOnlineId ?? card.uid ?? '');
+        const price = numberOrUndefined(card.offer?.price?.effectiveValue ?? card.offer?.price?.advertisedValue);
+        if (uid && price !== undefined) prices.set(uid, price);
+      }
+    }
+
+    return normaliseBasket(details, prices);
+  }
+
+  async addToBasket(productId: string, quantity: number): Promise<void> {
+    await this.setBasketItem(productId, quantity, 'PRODUCT');
+  }
+
+  async updateBasketItem(itemId: string, quantity: number): Promise<void> {
+    const basket = await this.basketDetails();
+    const item = basket.categories.flatMap(category => category.items ?? []).find(candidate => String(candidate.id) === itemId);
+    if (!item) throw new MigrosError(`Migros basket item not found: ${itemId}`);
+    await this.setBasketItem(itemId, quantity, item.type);
+  }
+
+  async removeFromBasket(itemId: string): Promise<void> {
+    await this.updateBasketItem(itemId, 0);
+  }
+
+  async clearBasket(): Promise<void> {
+    const basket = await this.basketDetails();
+    for (const item of basket.categories.flatMap(category => category.items ?? [])) {
+      await this.setBasketItem(String(item.id), 0, item.type);
+    }
   }
 
   async search(query: string, options: SearchOptions = {}): Promise<Product[]> {
@@ -352,6 +537,26 @@ export class MigrosProvider implements GroceryProvider {
 
   async search(query: string, options?: SearchOptions): Promise<Product[]> {
     return this.session.search(query, options);
+  }
+
+  async getBasket(): Promise<Basket> {
+    return this.session.getBasket();
+  }
+
+  async addToBasket(productId: string, quantity: number): Promise<void> {
+    return this.session.addToBasket(productId, quantity);
+  }
+
+  async updateBasketItem(itemId: string, quantity: number): Promise<void> {
+    return this.session.updateBasketItem(itemId, quantity);
+  }
+
+  async removeFromBasket(itemId: string): Promise<void> {
+    return this.session.removeFromBasket(itemId);
+  }
+
+  async clearBasket(): Promise<void> {
+    return this.session.clearBasket();
   }
 
   async logout(): Promise<void> {
