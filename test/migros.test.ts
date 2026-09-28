@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { MigrosProvider, MigrosSession, normaliseProduct } from '../src/providers/migros';
+import { MigrosProvider, MigrosSession, normaliseBasket, normaliseProduct } from '../src/providers/migros';
 import type { MigrosSearchSession } from '../src/providers/migros';
 
 let failures = 0;
@@ -34,6 +34,15 @@ class FakeSession implements MigrosSearchSession {
         }];
   }
 
+  async getBasket() {
+    return { items: [], total_quantity: 0, total_cost: 0, provider: 'migros', currency: 'CHF' };
+  }
+
+  async addToBasket() {}
+  async updateBasketItem() {}
+  async removeFromBasket() {}
+  async clearBasket() {}
+
   async close(): Promise<void> {
     this.closed++;
   }
@@ -56,8 +65,103 @@ function fakeBrowser(evaluate: (args: any) => any, closed: string[]) {
   } as any;
 }
 
+function basketBrowser(
+  evaluate: (args: any) => any,
+  requests: any[],
+  closed: string[] = []
+) {
+  return fakeBrowser(args => {
+    requests.push(args);
+    return evaluate(args);
+  }, closed);
+}
+
 async function main(): Promise<void> {
   console.log('migros provider');
+
+await check('normalises basket totals, quantities, CHF and item types without inventing prices', () => {
+  const basket = normaliseBasket({
+    shoppingListId: 'dynamic-list',
+    categories: [{ items: [
+      { id: 101, name: 'Flour', quantity: 2, type: 'PRODUCT' },
+      { id: 202, name: 'Promotion', quantity: 1, type: 'GROUPED_PROMOTION' },
+    ] }],
+    totals: { onlineTotal: { estimatedTotal: 8.5 } },
+  }, new Map([['101', 3.25]]));
+  assert.equal(basket.total_quantity, 3);
+  assert.equal(basket.total_cost, 8.5);
+  assert.equal(basket.currency, 'CHF');
+  assert.equal(basket.items[0].total_price, 6.5);
+  assert.equal(basket.items[1].unit_price, 0);
+  assert.equal(basket.items[1].item_id, '202');
+});
+
+await check('getBasket discovers a dynamic shopping list id and uses online product cards', async () => {
+  const requests: any[] = [];
+  const session = new MigrosSession(async () => basketBrowser(args => {
+    if (String(args.url).includes('/guest?')) return { status: 200, contentType: 'application/json', body: '{"userid":"guest-1"}' };
+    if (String(args.url).includes('/lists/overview')) return { status: 200, contentType: 'application/json', body: '[{"shoppingListId":"dynamic-list"}]' };
+    if (String(args.url).includes('/list/details')) return { status: 200, contentType: 'application/json', body: JSON.stringify({
+      shoppingListId: 'dynamic-list',
+      categories: [{ items: [{ id: 101, name: 'Flour', quantity: 2, type: 'PRODUCT' }] }],
+      totals: { onlineTotal: { estimatedTotal: 6.5 } },
+    }) };
+    if (String(args.url).includes('/fulfilment-selection')) return { status: 200, contentType: 'application/json', body: '{"warehouseId":7}' };
+    if (String(args.url).includes('/product-cards')) return { status: 200, contentType: 'application/json', body: '[{"migrosId":101,"offer":{"price":{"effectiveValue":3.25}}}]' };
+    throw new Error(`unexpected ${args.url}`);
+  }, requests));
+  const basket = await session.getBasket();
+  assert.equal(basket.total_quantity, 2);
+  assert.equal(basket.total_cost, 6.5);
+  assert.equal(basket.items[0].unit_price, 3.25);
+  const cards = requests.find(request => String(request.url).includes('/product-cards'));
+  assert.deepEqual(cards.body.offerFilter, { storeType: 'ONLINE', warehouseId: 7, ongoingOfferDate: cards.body.offerFilter.ongoingOfferDate });
+  assert.deepEqual(cards.body.productFilter, { uids: [101] });
+  assert.ok(requests.some(request => String(request.url).includes('shoppingListId=dynamic-list')));
+  await session.close();
+});
+
+await check('basket writes use PUT, absolute quantities, zero removal and the stored item type', async () => {
+  const requests: any[] = [];
+  const session = new MigrosSession(async () => basketBrowser(args => {
+    if (String(args.url).includes('/guest?')) return { status: 200, contentType: 'application/json', body: '{"userid":"guest-1"}' };
+    if (String(args.url).includes('/lists/overview')) return { status: 200, contentType: 'application/json', body: '[{"shoppingListId":987654}]' };
+    if (String(args.url).includes('/list/details')) return { status: 200, contentType: 'application/json', body: JSON.stringify({
+      shoppingListId: 987654,
+      categories: [{ items: [{ id: 202, name: 'Promotion', quantity: 1, type: 'GROUPED_PROMOTION' }] }],
+      totals: { onlineTotal: { estimatedTotal: 4 } },
+    }) };
+    if (String(args.url).includes('/shopping-list/public/v3/items')) return { status: 200, contentType: 'application/json', body: JSON.stringify({
+      shoppingListId: 987654, categories: [], totals: { onlineTotal: { estimatedTotal: 0 } },
+    }) };
+    throw new Error(`unexpected ${args.url}`);
+  }, requests));
+  await session.addToBasket('101', 3);
+  await session.updateBasketItem('202', 2);
+  await session.removeFromBasket('202');
+  const puts = requests.filter(request => request.method === 'PUT');
+  assert.deepEqual(puts.map(request => request.body), [
+    { shoppingListId: 987654, items: [{ id: '101', quantity: 3, type: 'PRODUCT' }] },
+    { shoppingListId: 987654, items: [{ id: '202', quantity: 2, type: 'GROUPED_PROMOTION' }] },
+    { shoppingListId: 987654, items: [{ id: '202', quantity: 0, type: 'GROUPED_PROMOTION' }] },
+  ]);
+  await session.close();
+});
+
+await check('basket translates HTTP errors and unexpected schemas', async () => {
+  const httpError = new MigrosSession(async () => basketBrowser(args => {
+    if (String(args.url).includes('/guest?')) return { status: 200, contentType: 'application/json', body: '{"userid":"guest-1"}' };
+    return { status: 503, contentType: 'application/json', body: '{}' };
+  }, []));
+  await assert.rejects(httpError.getBasket(), /HTTP 503/);
+
+  const badSchema = new MigrosSession(async () => basketBrowser(args => {
+    if (String(args.url).includes('/guest?')) return { status: 200, contentType: 'application/json', body: '{"userid":"guest-1"}' };
+    if (String(args.url).includes('/lists/overview')) return { status: 200, contentType: 'application/json', body: '[{"shoppingListId":987654}]' };
+    return { status: 200, contentType: 'application/json', body: '{}' };
+  }, []));
+  await assert.rejects(badSchema.getBasket(), /unexpected schema/);
+});
 
 await check('normalises Migros product cards without inventing optional fields', () => {
   const product = normaliseProduct({
