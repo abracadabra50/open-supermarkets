@@ -23,6 +23,8 @@
     "supermarket": "tsx src/cli.ts",
     "prepublishOnly": "npm run build",
     "test": "tsx test/lazy-loading.test.ts && tsx test/sainsburys-favourites.test.ts && tsx test/tesco-hu.test.ts && tsx test/migros.test.ts",
+    "test": "tsx test/lazy-loading.test.ts && tsx test/sainsburys-favourites.test.ts && tsx test/tesco-hu.test.ts && tsx test/ahorramas.test.ts",
+    "test:ahorramas:live": "tsx scripts/ahorramas-live.ts",
     "typecheck": "tsc --noEmit"
   },
   "keywords": [

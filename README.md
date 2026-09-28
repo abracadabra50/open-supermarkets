@@ -5,6 +5,7 @@
 ### The open-source grocery interface for humans and AI agents
 
 **Search live products and prices, compare retailers, build baskets and check out safely<br>across eleven providers in eight countries.**
+**Search live products and prices, compare retailers, build baskets and check out safely<br>across eleven providers in seven countries.**
 
 **CLI · HTTP API · MCP · Agent Skills**
 
@@ -164,6 +165,7 @@ checkout needs an account, address and payment method, so it exists for fewer.
 | Albert Heijn | 🇳🇱 | ✓ | — | — | — | **none** |
 | Albert Heijn België | 🇧🇪 | ✓ | — | — | — | **none** |
 | Mercadona | 🇪🇸 | ✓ | — | — | — | **none** |
+| AhorraMás | 🇪🇸 | ✓ | — | — | — | **none** |
 | Kroger *+ Ralphs, Fred Meyer, King Soopers, Harris Teeter, QFC* | 🇺🇸 | ✓ | — | — | — | free API key |
 | Instacart | 🇺🇸 🇨🇦 | ✓ | ✓ | — | via link | partner key |
 | Instacart *(unofficial)* | 🇺🇸 🇨🇦 | ✓ | ✓ | — | — | browser session |
@@ -254,6 +256,10 @@ Never rely on it as medical or allergy advice. Check the product packaging.
 
 This project gets more useful when people add the supermarket they can actually test.
 A search-only provider can be one file plus one manifest entry.
+
+**AhorraMás — Spain — search.** Search requires no credentials and reads the
+anonymous Salesforce Commerce Cloud storefront. Availability can depend on the
+selected location; basket operations are not supported yet.
 
 Before starting, read [`docs/providers/evaluated.md`](docs/providers/evaluated.md). It
 records providers already investigated, what worked, what failed and when. That avoids
