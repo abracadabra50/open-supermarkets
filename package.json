@@ -22,7 +22,8 @@
     "setup": "./setup.sh",
     "supermarket": "tsx src/cli.ts",
     "prepublishOnly": "npm run build",
-    "test": "tsx test/lazy-loading.test.ts && tsx test/sainsburys-favourites.test.ts && tsx test/tesco-hu.test.ts && tsx test/lidl-ie.test.js",
+    "test": "tsx test/lazy-loading.test.ts && tsx test/sainsburys-favourites.test.ts && tsx test/tesco-hu.test.ts && tsx test/ahorramas.test.ts && tsx test/lidl-ie.test.js",
+    "test:ahorramas:live": "tsx scripts/ahorramas-live.ts",
     "typecheck": "tsc --noEmit"
   },
   "keywords": [
