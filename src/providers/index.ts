@@ -40,6 +40,8 @@ export class ProviderFactory {
         return new (require('./ahorramas').AhorramasProvider)();
       case 'tesco-hu':
         return new (require('./tesco-hu/index').TescoHuProvider)();
+      case 'migros':
+        return new (require('./migros').MigrosProvider)();
       case 'kroger':
         return new (require('./kroger').KrogerProvider)();
       case 'instacart':

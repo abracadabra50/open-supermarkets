@@ -11,7 +11,8 @@ export interface Product {
     measure: string;
     price: number;
   };
-  in_stock: boolean;
+  /** Whether the provider explicitly reports availability. Absent means unknown. */
+  in_stock?: boolean;
   image_url?: string;
   provider: string; // sainsburys, ocado, tesco, etc.
   /**

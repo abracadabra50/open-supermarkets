@@ -4,6 +4,7 @@
 
 ### The open-source grocery interface for humans and AI agents
 
+**Search live products and prices, compare retailers, build baskets and check out safely<br>across eleven providers in eight countries.**
 **Search live products and prices, compare retailers, build baskets and check out safely<br>across eleven providers in seven countries.**
 
 **CLI · HTTP API · MCP · Agent Skills**
@@ -12,7 +13,7 @@
 
 [![npm](https://img.shields.io/npm/v/open-supermarkets?color=CB3837&logo=npm&logoColor=white)](https://www.npmjs.com/package/open-supermarkets)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
-[![Countries](https://img.shields.io/badge/countries-7-2ea44f)](#what-works-where)
+[![Countries](https://img.shields.io/badge/countries-8-2ea44f)](#what-works-where)
 [![Providers](https://img.shields.io/badge/providers-11-2ea44f)](#what-works-where)
 [![No credentials](https://img.shields.io/badge/3%20countries-no%20credentials-orange)](#what-works-where)
 [![CI](https://github.com/abracadabra50/open-supermarkets/actions/workflows/ci.yml/badge.svg)](https://github.com/abracadabra50/open-supermarkets/actions/workflows/ci.yml)
@@ -169,12 +170,18 @@ checkout needs an account, address and payment method, so it exists for fewer.
 | Instacart | 🇺🇸 🇨🇦 | ✓ | ✓ | — | via link | partner key |
 | Instacart *(unofficial)* | 🇺🇸 🇨🇦 | ✓ | ✓ | — | — | browser session |
 | Tesco Magyarország | 🇭🇺 | ✓ | ✓ | — | — | browser session (basket only) |
+| Migros | 🇨🇭 | ✓ | — | — | — | live Playwright browser context |
 
 `supermarket providers` prints this live from the registry. The manifest is the source
 of truth rather than a hand-maintained marketing claim.
 
 Ocado slot booking and checkout are blocked by AWS WAF. Reading slots works; committing
 to one does not. The manifest therefore does not claim those capabilities.
+
+Migros catalogue search runs inside a live Chromium context because cold HTTP requests
+are blocked by Cloudflare. The provider calls Migros's JSON search API from that browser
+context, then closes the browser after the search; browser cookies are not currently
+reusable by Axios after the browser closes.
 
 ---
 

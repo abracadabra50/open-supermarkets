@@ -1,13 +1,13 @@
 ---
 name: open-supermarkets
-description: "Grocery automation across ten retailers in seven countries — UK, Netherlands, Belgium, Spain, Hungary, the US and Canada. Search, compare, basket, delivery slots and checkout, plus Open Food Facts nutrition and allergen enrichment. Available as CLI, MCP server, or agent skill."
+description: "Grocery automation across eleven retailers in eight countries — UK, Netherlands, Belgium, Spain, Hungary, Switzerland, the US and Canada. Search, compare, basket, delivery slots and checkout, plus Open Food Facts nutrition and allergen enrichment. Available as CLI, MCP server, or agent skill."
 license: MIT
 compatibility: Node.js 18+, TypeScript. Playwright only for browser-auth providers. Delivery areas vary by retailer.
 metadata:
   author: zish
   version: "3.0.0"
   repository: https://github.com/abracadabra50/open-supermarkets
-  tags: [groceries, supermarket, sainsburys, ocado, tesco, tesco-hu, hungary, albert-heijn, mercadona, kroger, instacart, uk, netherlands, belgium, spain, usa, shopping, automation, mcp, agent-tool]
+  tags: [groceries, supermarket, sainsburys, ocado, tesco, tesco-hu, migros, hungary, switzerland, albert-heijn, mercadona, kroger, instacart, uk, netherlands, belgium, spain, usa, shopping, automation, mcp, agent-tool]
 allowed-tools: Bash({baseDir}/node:*), Bash(supermarket:*), Bash(npm:run:supermarket:*)
 ---
 
@@ -29,6 +29,7 @@ Each supermarket has a dedicated skill file with provider-specific commands, aut
 | **Tesco** | [`skills/tesco.md`](skills/tesco.md) | Full coverage + staples |
 | **Ocado** | [`skills/ocado.md`](skills/ocado.md) | Full coverage except slot booking/checkout (AWS WAF) |
 | **Tesco Magyarország** | [`skills/tesco-hu.md`](skills/tesco-hu.md) | Search and basket; no slots/checkout |
+| **Migros** | [`skills/migros.md`](skills/migros.md) | Browser-backed search; no basket |
 
 ---
 
@@ -47,6 +48,7 @@ npx playwright install chromium
 npm run groc -- --provider sainsburys search "milk"
 npm run groc -- --provider tesco search "milk"
 npm run groc -- --provider ocado search "milk"
+npm run groc -- --provider migros search "milk"
 
 # Compare across all stores
 npm run groc compare "organic eggs" --json
