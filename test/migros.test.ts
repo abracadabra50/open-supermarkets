@@ -187,6 +187,22 @@ await check('normalises Migros product cards without inventing optional fields',
   });
 });
 
+await check('drops product cards without a usable retail price', () => {
+  assert.equal(normaliseProduct({ migrosId: 'missing-price', title: 'No price' }), undefined);
+  assert.equal(
+    normaliseProduct({ migrosId: 'invalid-price', title: 'Bad price', offer: { price: { effectiveValue: Number.NaN } } }),
+    undefined
+  );
+});
+
+await check('preserves only explicit Migros availability states', () => {
+  const base = { migrosId: 'availability', title: 'Availability', offer: { price: { effectiveValue: 1 } } };
+  assert.equal(normaliseProduct({ ...base, productAvailability: 'ONLINE' })?.in_stock, true);
+  assert.equal(normaliseProduct({ ...base, productAvailability: 'OUT_OF_STOCK' })?.in_stock, false);
+  assert.equal(normaliseProduct({ ...base, productAvailability: 'UNKNOWN' })?.in_stock, undefined);
+  assert.equal(normaliseProduct(base)?.in_stock, undefined);
+});
+
 await check('search delegates a query and returns products', async () => {
   const session = new FakeSession();
   const products = await new MigrosProvider(session).search('milk', { limit: 5 });

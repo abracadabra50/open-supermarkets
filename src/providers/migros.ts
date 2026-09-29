@@ -201,11 +201,30 @@ function numberOrUndefined(value: unknown): number | undefined {
   return value;
 }
 
-export function normaliseProduct(card: MigrosProductCard, provider = MIGROS.id): Product {
+function stockFromAvailability(availability: unknown): boolean | undefined {
+  if (typeof availability !== 'string') return undefined;
+
+  switch (availability.toUpperCase()) {
+    case 'ONLINE':
+    case 'ONLINE_AND_INSTORE':
+    case 'IN_STOCK':
+    case 'AVAILABLE':
+      return true;
+    case 'OUT_OF_STOCK':
+    case 'UNAVAILABLE':
+    case 'NOT_AVAILABLE':
+      return false;
+    default:
+      return undefined;
+  }
+}
+
+export function normaliseProduct(card: MigrosProductCard, provider = MIGROS.id): Product | undefined {
   const price = card.offer?.price;
-  const retailPrice = numberOrUndefined(price?.effectiveValue ?? price?.advertisedValue) ?? 0;
+  const retailPrice = numberOrUndefined(price?.effectiveValue ?? price?.advertisedValue);
+  if (retailPrice === undefined) return undefined;
   const unitPrice = numberOrUndefined(price?.unitPrice?.value);
-  const availability = card.productAvailability;
+  const inStock = stockFromAvailability(card.productAvailability);
 
   return {
     product_uid: String(card.migrosId ?? card.migrosOnlineId ?? card.uid ?? ''),
@@ -216,7 +235,7 @@ export function normaliseProduct(card: MigrosProductCard, provider = MIGROS.id):
       unitPrice !== undefined && price?.unitPrice?.unit
         ? { price: unitPrice, measure: price.unitPrice.unit }
         : undefined,
-    in_stock: typeof availability === 'string' && /ONLINE|IN_STOCK|AVAILABLE/i.test(availability),
+    ...(inStock === undefined ? {} : { in_stock: inStock }),
     image_url: card.images?.find(image => image.url)?.url ?? card.imageTransparent?.url,
     provider,
     currency: MIGROS.currency,
@@ -496,7 +515,9 @@ export class MigrosSession implements MigrosSearchSession {
       if (!Array.isArray(cards)) {
         throw new MigrosError('Migros product-card response has an unexpected schema.');
       }
-      return cards.map(card => normaliseProduct(card));
+      return cards
+        .map(card => normaliseProduct(card))
+        .filter((product): product is Product => product !== undefined);
     } finally {
       // CLI and MCP callers create a provider per operation and do not have a
       // universal disposal hook. Keep Chromium alive for the complete search,

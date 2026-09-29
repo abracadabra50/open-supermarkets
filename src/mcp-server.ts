@@ -14,6 +14,8 @@ import {
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 import { ProviderFactory, ProviderName, compareProduct } from './providers/index.js';
+import { getProviderAccess } from './mcp-access.js';
+import type { McpCapability } from './mcp-access.js';
 import type { FullGroceryProvider } from './providers/types.js';
 import { money } from './format.js';
 import { explain } from './errors.js';
@@ -42,9 +44,6 @@ const SESSION_PATHS: Partial<Record<ProviderName, string>> = {
   'tesco-hu': `${os.homedir()}/.tesco-hu/session.json`,
 };
 
-/** Providers whose catalogue search works with no session at all. */
-const ANONYMOUS_SEARCH = new Set<ProviderName>(['tesco-hu', 'migros']);
-
 function isLoggedIn(provider: ProviderName): boolean {
   const sessionPath = SESSION_PATHS[provider];
   return Boolean(sessionPath && fs.existsSync(sessionPath));
@@ -57,6 +56,12 @@ function requireLogin(provider: ProviderName): string | null {
   return null;
 }
 
+/** Validate the manifest and require a stored session only when its auth model needs one. */
+export function requireProviderAccess(provider: ProviderName, capability: McpCapability): string | null {
+  const access = getProviderAccess(provider, capability);
+  return access.error ?? (access.requiresStoredSession ? requireLogin(provider) : null);
+}
+
 function getProvider(name: ProviderName): FullGroceryProvider {
   return ProviderFactory.create(name);
 }
@@ -66,6 +71,10 @@ function textResult(text: string, isError = false) {
     content: [{ type: 'text' as const, text }],
     ...(isError ? { isError: true } : {}),
   };
+}
+
+function stockLabel(inStock: boolean | undefined): string {
+  return inStock === true ? 'In stock' : inStock === false ? 'Out of stock' : 'Availability unknown';
 }
 
 // ─── Tool definitions ────────────────────────────────────────────
@@ -388,6 +397,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
     // ── grocery_compare ──
     if (name === 'grocery_search_batch') {
+      const accessError = requireProviderAccess(providerName, 'search');
+      if (accessError) return textResult(accessError, true);
       const { queries = [], limit = 5 } = args as { queries?: string[]; limit?: number };
       if (!queries.length) return textResult('Give me at least one query.', true);
       const { batchSearch } = await import('./batch.js');
@@ -397,6 +408,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     }
 
     if (name === 'grocery_basket_add_batch') {
+      const accessError = requireProviderAccess(providerName, 'basket');
+      if (accessError) return textResult(accessError, true);
       const { items = [] } = args as { items?: Array<{ id: string; qty?: number }> };
       if (!items.length) return textResult('Give me at least one item.', true);
       const { batchAdd } = await import('./batch.js');
@@ -430,20 +443,20 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       return textResult(`Price comparison for "${query}":\n\n${sections.join('\n\n')}`);
     }
 
-    // All remaining tools require login
+    // Tools below may require a stored session, according to the provider manifest.
     const loginError = requireLogin(providerName);
 
     // ── grocery_search ──
     if (name === 'grocery_search') {
-      // Search can sometimes work without login for some providers, but check anyway
-      if (loginError && !ANONYMOUS_SEARCH.has(providerName)) return textResult(loginError, true);
+      const accessError = requireProviderAccess(providerName, 'search');
+      if (accessError) return textResult(accessError, true);
       const { query, limit = 10 } = args as { query: string; limit?: number };
       const provider = getProvider(providerName);
       const results = await provider.search(query);
       const limited = results.slice(0, limit);
 
       const formatted = limited.map((p, i) => {
-        const stock = p.in_stock ? 'In stock' : 'Out of stock';
+        const stock = stockLabel(p.in_stock);
         const unitPrice = p.unit_price ? ` (${p.unit_price.price}/${p.unit_price.measure})` : '';
         return `${i + 1}. ${p.name}\n   ${money(p.retail_price.price, p.currency)}${unitPrice} | ${stock} | ID: ${p.product_uid}`;
       }).join('\n\n');
@@ -469,7 +482,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       const formatted = products.map((p: any, i: number) => {
-        const stock = p.in_stock ? 'In stock' : 'Out of stock';
+        const stock = stockLabel(p.in_stock);
         const unitPrice = p.unit_price ? ` (${p.unit_price.price}/${p.unit_price.measure})` : '';
         return `${i + 1}. ${p.name}\n   ${money(p.retail_price.price, p.currency)}${unitPrice} | ${stock} | ID: ${p.product_uid}`;
       }).join('\n\n');
@@ -495,7 +508,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       const formatted = products.map((p: any, i: number) => {
-        const stock = p.in_stock ? 'In stock' : 'Out of stock';
+        const stock = stockLabel(p.in_stock);
         const unitPrice = p.unit_price ? ` (${p.unit_price.price}/${p.unit_price.measure})` : '';
         return `${i + 1}. ${p.name}\n   ${money(p.retail_price.price, p.currency)}${unitPrice} | ${stock} | ID: ${p.product_uid}`;
       }).join('\n\n');
@@ -536,7 +549,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       const formatted = products.map((p: any, i: number) => {
-        const stock = p.in_stock ? 'In stock' : 'Out of stock';
+        const stock = stockLabel(p.in_stock);
         const unitPrice = p.unit_price ? ` (${p.unit_price.price}/${p.unit_price.measure})` : '';
         return `${i + 1}. ${p.name}\n   ${money(p.retail_price.price, p.currency)}${unitPrice} | ${stock} | ID: ${p.product_uid}`;
       }).join('\n\n');
@@ -565,7 +578,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
     // ── grocery_basket_view ──
     if (name === 'grocery_basket_view') {
-      if (loginError) return textResult(loginError, true);
+      const accessError = requireProviderAccess(providerName, 'basket');
+      if (accessError) return textResult(accessError, true);
       const provider = getProvider(providerName);
       const basket = await provider.getBasket();
 
@@ -584,7 +598,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
     // ── grocery_basket_add ──
     if (name === 'grocery_basket_add') {
-      if (loginError) return textResult(loginError, true);
+      const accessError = requireProviderAccess(providerName, 'basket');
+      if (accessError) return textResult(accessError, true);
       const { product_id, quantity = 1 } = args as { product_id: string; quantity?: number };
       const provider = getProvider(providerName);
       await provider.addToBasket(product_id, quantity);
@@ -593,7 +608,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
     // ── grocery_basket_remove ──
     if (name === 'grocery_basket_remove') {
-      if (loginError) return textResult(loginError, true);
+      const accessError = requireProviderAccess(providerName, 'basket');
+      if (accessError) return textResult(accessError, true);
       const { product_id } = args as { product_id: string };
       const provider = getProvider(providerName);
       await provider.removeFromBasket(product_id);
@@ -602,7 +618,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
     // ── grocery_basket_update ──
     if (name === 'grocery_basket_update') {
-      if (loginError) return textResult(loginError, true);
+      const accessError = requireProviderAccess(providerName, 'basket');
+      if (accessError) return textResult(accessError, true);
       const { item_id, quantity } = args as { item_id: string; quantity: number };
       const provider = getProvider(providerName);
       await provider.updateBasketItem(item_id, quantity);
@@ -611,7 +628,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
     // ── grocery_basket_clear ──
     if (name === 'grocery_basket_clear') {
-      if (loginError) return textResult(loginError, true);
+      const accessError = requireProviderAccess(providerName, 'basket');
+      if (accessError) return textResult(accessError, true);
       const provider = getProvider(providerName);
       await provider.clearBasket();
       return textResult(`${providerName} basket cleared.`);

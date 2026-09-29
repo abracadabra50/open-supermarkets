@@ -42,7 +42,7 @@ export interface LeanProduct {
   currency: string;
   size?: string;
   unit?: string;
-  inStock: boolean;
+  inStock?: boolean;
 }
 
 export function lean(p: Product): LeanProduct {
