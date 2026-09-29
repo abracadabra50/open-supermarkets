@@ -24,6 +24,17 @@ export interface Product {
   rating?: number;       // 0-5 overall rating, when the provider exposes it
   review_count?: number; // number of ratings behind `rating`
   size?: string;         // pack size, e.g. "750g", "6 pack"
+  /**
+   * Guaranteed remaining life in DAYS from delivery, when the provider states
+   * it. Ocado's `LIFE 3d+` badge is this number.
+   *
+   * Worth a field of its own because it is per-PACK and stated by the retailer:
+   * a generic "milk keeps a week" table cannot tell Cravendale's two weeks from
+   * a fresh organic line's six days, and any caller sequencing a meal plan or
+   * flagging waste needs the difference. Absent means the provider said
+   * nothing — never assume a default.
+   */
+  shelf_life_days?: number;
 }
 
 export interface BasketItem {
