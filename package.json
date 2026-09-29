@@ -1,7 +1,7 @@
 {
   "name": "open-supermarkets",
   "version": "3.0.0",
-  "description": "Open-source grocery infrastructure for humans and AI agents. Search live products and prices, compare retailers, build baskets and check out safely across supermarkets worldwide.",
+  "description": "Open-source supermarket infrastructure for humans and AI agents. One interface for live grocery search, prices, comparison, baskets and checkout across retailers and countries.",
   "type": "commonjs",
   "main": "dist/cli.js",
   "bin": {
@@ -51,7 +51,13 @@
     "belgium",
     "spain",
     "usa",
-    "canada"
+    "canada",
+    "ahorramas",
+    "tesco-hu",
+    "hungary",
+    "europe",
+    "grocery-api",
+    "price-comparison"
   ],
   "author": "Zishan Ashraf",
   "license": "MIT",

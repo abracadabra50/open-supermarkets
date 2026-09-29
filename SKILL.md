@@ -1,168 +1,166 @@
 ---
 name: open-supermarkets
-description: "Grocery automation across ten retailers in seven countries — UK, Netherlands, Belgium, Spain, Hungary, the US and Canada. Search, compare, basket, delivery slots and checkout, plus Open Food Facts nutrition and allergen enrichment. Available as CLI, MCP server, or agent skill."
+description: "Open-source supermarket infrastructure across 11 provider integrations in 7 countries. Search live catalogues and prices, compare retailers, build baskets, inspect slots and orders, and preview checkout through CLI, HTTP, MCP or agent skills."
 license: MIT
-compatibility: Node.js 18+, TypeScript. Playwright only for browser-auth providers. Delivery areas vary by retailer.
+compatibility: Node.js 18+, TypeScript. Playwright only for browser-auth providers. Delivery areas and capabilities vary by retailer.
 metadata:
   author: zish
   version: "3.0.0"
   repository: https://github.com/abracadabra50/open-supermarkets
-  tags: [groceries, supermarket, sainsburys, ocado, tesco, tesco-hu, hungary, albert-heijn, mercadona, kroger, instacart, uk, netherlands, belgium, spain, usa, shopping, automation, mcp, agent-tool]
+  tags: [groceries, supermarket, grocery-api, price-comparison, tesco, sainsburys, ocado, tesco-hu, albert-heijn, mercadona, ahorramas, kroger, instacart, uk, netherlands, belgium, spain, hungary, usa, canada, shopping, automation, mcp, agent-tool]
 allowed-tools: Bash({baseDir}/node:*), Bash(supermarket:*), Bash(npm:run:supermarket:*)
 ---
 
-# UK Grocery CLI - Agent Skills
+# Open Supermarkets
 
-Unified grocery automation across UK supermarkets. Use via CLI, MCP server, or as agent skills.
+One common grocery interface across supermarket providers in the UK, Europe and North America.
 
-**Location:** `{baseDir}`
+Use it when an agent needs live grocery search, retailer comparison, basket operations, delivery slots, order history or a checkout preview.
 
----
+## Current coverage
 
-## Per-Supermarket Skills
+Current `main` includes 11 provider integrations across 7 countries:
 
-Each supermarket has a dedicated skill file with provider-specific commands, authentication, and API details:
+| Provider | Market | Main capabilities |
+|---|---|---|
+| Sainsbury's | UK | search, basket, slots, checkout, orders |
+| Tesco | UK | search, basket, slots, checkout, orders |
+| Ocado | UK | search, basket, read slots, orders |
+| Albert Heijn | Netherlands | search |
+| Albert Heijn België | Belgium | search |
+| Mercadona | Spain | search |
+| AhorraMás | Spain | search |
+| Tesco Magyarország | Hungary | search, basket |
+| Kroger | US | search |
+| Instacart | US, Canada | search, basket |
+| Instacart Web | US, Canada | search, basket |
 
-| Supermarket | Skill File | Status |
-|-------------|-----------|--------|
-| **Sainsbury's** | [`skills/sainsburys.md`](skills/sainsburys.md) | Full coverage |
-| **Tesco** | [`skills/tesco.md`](skills/tesco.md) | Full coverage + staples |
-| **Ocado** | [`skills/ocado.md`](skills/ocado.md) | Full coverage except slot booking/checkout (AWS WAF) |
-| **Tesco Magyarország** | [`skills/tesco-hu.md`](skills/tesco-hu.md) | Search and basket; no slots/checkout |
+Run `supermarket providers` for the live registry-backed capability matrix.
 
----
-
-## Quick Start
-
-```bash
-cd {baseDir}
-npm install
-npx playwright install chromium
-```
-
-### CLI Usage
+## Quick start
 
 ```bash
-# Search any supermarket
-npm run groc -- --provider sainsburys search "milk"
-npm run groc -- --provider tesco search "milk"
-npm run groc -- --provider ocado search "milk"
-
-# Compare across all stores
-npm run groc compare "organic eggs" --json
-
-# Provider is a flag - all commands work the same way
-npm run groc -- --provider <store> basket
-npm run groc -- --provider <store> add <id> --qty 2
-npm run groc -- --provider <store> slots
-npm run groc -- --provider <store> checkout --dry-run
+npx open-supermarkets providers
+npx open-supermarkets search "olive oil" --country ES --limit 5
 ```
 
-### MCP Server Usage
+Or install globally:
 
 ```bash
-# Start MCP server (stdio transport)
-npx tsx src/mcp-server.ts
-# Or after build:
-node dist/mcp-server.js
+npm install -g open-supermarkets
+supermarket providers
 ```
 
-Claude Desktop config (`claude_desktop_config.json`):
+## CLI
+
+```bash
+# Search by country
+supermarket search "milk" --country NL --json
+supermarket search "leche" --country ES --json
+
+# Search a specific provider
+supermarket --provider tesco search "milk" --json
+supermarket --provider tesco-hu search "tej" --json
+
+# Basket and checkout where supported
+supermarket --provider tesco basket --json
+supermarket --provider tesco add PRODUCT_ID --qty 1
+supermarket --provider tesco checkout
+```
+
+Checkout previews by default. Spending requires explicit confirmation.
+
+## MCP
+
+Use the MCP server when the host supports Model Context Protocol:
+
 ```json
 {
   "mcpServers": {
-    "uk-grocery": {
-      "command": "node",
-      "args": ["/path/to/uk-grocery-cli/dist/mcp-server.js"]
+    "groceries": {
+      "command": "npx",
+      "args": ["-y", "open-supermarkets", "mcp"]
     }
   }
 }
 ```
 
----
+Prefer batch tools for multi-item workflows:
 
-## MCP Tools Reference
+- `grocery_search_batch`
+- `grocery_basket_add_batch`
 
-All tools accept a `provider` parameter (`sainsburys`, `ocado`, `tesco`). Default: `sainsburys`.
+Use `grocery_providers` to inspect the providers exposed by the MCP server.
 
-### Core Tools (all providers)
+## How to reason about providers
 
-| Tool | Description |
-|------|-------------|
-| `grocery_login` | Login to supermarket account |
-| `grocery_status` | Check login status across all providers |
-| `grocery_search` | Search products |
-| `grocery_compare` | Compare prices across all stores |
-| `grocery_basket_view` | View basket contents |
-| `grocery_basket_add` | Add product to basket |
-| `grocery_basket_remove` | Remove from basket |
-| `grocery_basket_update` | Update item quantity |
-| `grocery_basket_clear` | Clear basket |
-| `grocery_slots` | List delivery slots |
-| `grocery_book_slot` | Book delivery slot |
-| `grocery_checkout` | Checkout (dry_run=true by default) |
-| `grocery_orders` | View order history |
-| `grocery_favourites` | Favourite / frequently-bought products (Sainsbury's, Ocado) |
-| `grocery_favourites_search` | Search within favourites (Sainsbury's, Ocado) |
-| `grocery_categories` | List browse categories (Sainsbury's, Ocado) |
-| `grocery_browse` | Browse products in a category (Ocado) |
-| `grocery_providers` | List providers and login status |
+Providers are capability-based.
 
-### Provider-Specific Tools
+Do not assume that because search works, basket or checkout also works. Check the provider capability matrix first.
 
-| Tool | Description |
-|------|-------------|
-| `tesco_staples` | View, update, or auto-add repeat-purchase staples |
-| `ocado_regulars` | List Ocado recurring-shopping ("Regulars") definitions |
+Search-only integrations are intentionally first-class because catalogue and pricing access is useful even when authenticated shopping is not available.
 
----
+## Product selection
 
-## When to Use This Skill
+The provider returns candidates. The agent should decide what to buy using user context such as:
 
-Trigger when users:
-- Want to plan meals or order groceries
-- Ask about product prices or availability
-- Want to compare prices across supermarkets
-- Need to manage a shopping basket
-- Want to book delivery slots or checkout
-- Ask about weekly shop, meal prep, or grocery budget
+- requested ingredient/product;
+- pack size;
+- quantity;
+- budget;
+- dietary restrictions;
+- brand preference;
+- recipe;
+- household size.
 
----
+Do not blindly select the first or cheapest absolute-price result.
 
-## Example Agent Workflows
+## Availability
 
-### Meal Planning
-```bash
-# Search ingredients across stores
-npm run groc compare "chicken breast" --json
-npm run groc compare "basmati rice" --json
+Treat availability as a truth claim.
 
-# Add to cheapest provider
-npm run groc -- --provider tesco add PRODUCT_ID --qty 1
-npm run groc -- --provider tesco basket --json
-npm run groc -- --provider tesco checkout --dry-run
-```
+If a provider can distinguish unknown availability, do not convert unknown into out-of-stock or in-stock.
 
-### Restock Staples (Tesco)
-```bash
-npm run groc -- --provider tesco staples --add
-npm run groc -- --provider tesco basket --json
-npm run groc -- --provider tesco checkout --dry-run
-```
+## Authentication
 
-### Price Comparison
-```bash
-npm run groc compare "organic milk" --json
-# Returns results from all providers with prices
-```
+Authentication varies by provider:
 
----
+- none;
+- anonymous/guest session;
+- API key;
+- OAuth;
+- credentials;
+- browser-imported session.
 
-## Documentation
+Follow the provider manifest and provider-specific notes rather than assuming every retailer supports scripted login.
 
-- [`skills/sainsburys.md`](skills/sainsburys.md) - Sainsbury's skill details
-- [`skills/tesco.md`](skills/tesco.md) - Tesco skill details
-- [`skills/ocado.md`](skills/ocado.md) - Ocado skill details
-- [`AGENTS.md`](AGENTS.md) - Full agent integration guide
-- [`docs/SMART-SHOPPING.md`](docs/SMART-SHOPPING.md) - Smart shopping decisions
-- [`API-REFERENCE.md`](API-REFERENCE.md) - API endpoint documentation
+## Error handling
+
+A legitimate empty search may return an empty product list.
+
+Authentication failures, rate limits, malformed retailer responses and bot/WAF challenges should remain errors. Do not treat them as "no products found".
+
+## Provider-specific skills
+
+Dedicated notes currently exist for:
+
+- [Sainsbury's](skills/sainsburys.md)
+- [Tesco](skills/tesco.md)
+- [Ocado](skills/ocado.md)
+- [Tesco Magyarország](skills/tesco-hu.md)
+
+Providers without a dedicated skill file still work through the common provider interface where their declared capabilities are supported.
+
+## Nutrition and allergens
+
+`--enrich` adds Open Food Facts data such as Nutri-Score, NOVA group, ingredients and allergens.
+
+Treat enrichment as auxiliary metadata. Exact identity matching is preferred; fuzzy matches should never be presented as definitive allergy information.
+
+## References
+
+- [README.md](README.md)
+- [AGENTS.md](AGENTS.md)
+- [docs/API.md](docs/API.md)
+- [docs/PROVIDER-SPEC.md](docs/PROVIDER-SPEC.md)
+- [CONTRIBUTING.md](CONTRIBUTING.md)

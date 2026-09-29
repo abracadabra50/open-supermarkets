@@ -1,4 +1,6 @@
-# Sainsbury's API Reference
+# Sainsbury's Protocol Reference
+
+> This is a provider-specific reverse-engineering reference for Sainsbury's, retained for implementation/debugging history. For the global Open Supermarkets interface, provider model and current coverage, see [`docs/API.md`](docs/API.md) and [`docs/PROVIDER-SPEC.md`](docs/PROVIDER-SPEC.md).
 
 ## Working Endpoints ✅
 

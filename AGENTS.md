@@ -1,633 +1,180 @@
-## Agent Integration Guide
+# Agent Integration Guide
 
-This document explains how to integrate Sainsbury's CLI into AI agent frameworks.
+Open Supermarkets gives agents one grocery interface across multiple retailers and countries instead of requiring retailer-specific integrations in every agent.
 
----
+Current `main` covers 11 provider integrations across the UK, Netherlands, Belgium, Spain, Hungary, the US and Canada.
 
-## Supported Frameworks
+## What agents should use it for
 
-- ✅ **OpenClaw** / **Clawdbot** - Skills system
-- ✅ **Pi Agent** / **Mom** - Slack bot with skills
-- ✅ **Claude Desktop** - MCP server (future)
-- ✅ **Custom agents** - Any framework that can call bash
+Use Open Supermarkets when an agent needs to:
 
----
+- search live supermarket catalogues and prices;
+- compare products across retailers in a country;
+- build or inspect baskets where supported;
+- inspect delivery slots or order history where supported;
+- prepare a checkout preview without spending money;
+- enrich products with nutrition/allergen data;
+- plan a multi-item grocery shop efficiently.
 
-## Quick Integration
+The model should make the shopping decision. The provider layer should return truthful candidates and perform explicitly requested operations.
 
-### 1. Add as Skill
+## Preferred interfaces
 
-Copy to your agent's skills directory:
+### MCP
 
-```bash
-cp -r sainsburys-cli /path/to/agent/skills/
-```
+Use the MCP server when the host supports Model Context Protocol:
 
-### 2. Agent Calls Commands
-
-```typescript
-// From your agent code
-await bash("cd skills/sainsburys-cli && npm run groc search 'milk'");
-```
-
-### 3. Parse JSON Responses
-
-```typescript
-const stdout = await bash("cd skills/sainsburys-cli && npm run groc search 'milk' --json");
-const results = JSON.parse(stdout);
-
-results.products.forEach(product => {
-  console.log(`${product.name} - £${product.retail_price.price}`);
-});
-```
-
----
-
-## Skill File Format
-
-The `SKILL.md` follows the open skills format used by OpenClaw, Pi, and other agent frameworks.
-
-### Frontmatter
-
-```yaml
----
-name: sainsburys-groceries
-description: AI-powered meal planning and grocery ordering
-license: MIT
-compatibility: Node.js 18+, TypeScript, Playwright
-metadata:
-  author: zish
-  version: "2.0.0"
-allowed-tools: Bash({baseDir}/node:*), Bash(npm:run:groc:*)
----
-```
-
-### Triggers
-
-Agent should load this skill when user:
-- Mentions meal planning or groceries
-- Asks "what's for dinner?"
-- Wants to order food/shopping
-- Talks about recipes or cooking
-- Mentions Sainsbury's
-
----
-
-## Natural Language Workflow
-
-### User Intent Detection
-
-```typescript
-const intents = {
-  mealPlanning: ["plan meals", "what should I cook", "dinner ideas"],
-  shopping: ["add to basket", "order groceries", "buy milk"],
-  delivery: ["book slot", "delivery Tuesday", "checkout"],
-  query: ["what's in my basket", "show orders", "search for bread"]
-};
-
-if (userMessage.match(/plan meals|what.*cook|dinner ideas/i)) {
-  await startMealPlanning();
-}
-```
-
-### Meal Planning Flow
-
-```typescript
-async function startMealPlanning() {
-  // 1. Ask constraints
-  await ask("How many people? Budget? Dietary restrictions?");
-  
-  // 2. Suggest meals
-  const meals = await suggestMeals({
-    people: 2,
-    budget: 50,
-    dietary: ["halal"]
-  });
-  
-  // 3. Get approval
-  await showMeals(meals);
-  const approved = await waitForApproval();
-  
-  // 4. Generate shopping list
-  const ingredients = extractIngredients(approved);
-  
-  // 5. Search products
-  for (const ingredient of ingredients) {
-    const result = await bash(`cd skills/sainsburys-cli && npm run groc search "${ingredient}" --json`);
-    const products = JSON.parse(result);
-    const best = pickBestMatch(products, ingredient);
-    shoppingList.push(best);
-  }
-  
-  // 6. Show list and add to basket
-  await showShoppingList(shoppingList);
-  if (await confirm("Add to basket?")) {
-    for (const item of shoppingList) {
-      await bash(`cd skills/sainsburys-cli && npm run groc add ${item.product_uid} --qty ${item.quantity}`);
-    }
-  }
-  
-  // 7. Checkout
-  await bash(`cd skills/sainsburys-cli && npm run groc basket --json`);
-  // ... show basket, book slot, checkout
-}
-```
-
----
-
-## Block Kit Integration (Slack Bots)
-
-For Slack agents like Pi/Mom, use Block Kit for rich UIs.
-
-### Shopping List
-
-```javascript
-async function showShoppingList(items, total) {
-  const blocks = [
-    {
-      "type": "header",
-      "text": {"type": "plain_text", "text": "🛒 Your Shopping List"}
-    },
-    {
-      "type": "section",
-      "text": {
-        "type": "mrkdwn",
-        "text": `*Total: £${total}* (${items.length} items)`
-      }
-    },
-    {"type": "divider"},
-    ...buildItemSections(items),
-    {
-      "type": "actions",
-      "elements": [
-        {
-          "type": "button",
-          "text": {"type": "plain_text", "text": "Add All to Basket"},
-          "action_id": "add_to_basket",
-          "style": "primary"
-        },
-        {
-          "type": "button",
-          "text": {"type": "plain_text", "text": "Modify List"},
-          "action_id": "modify_list"
-        }
-      ]
-    }
-  ];
-  
-  await sendBlocks(blocks);
-}
-
-function buildItemSections(items) {
-  const categories = groupByCategory(items);
-  const sections = [];
-  
-  for (const [category, products] of Object.entries(categories)) {
-    const itemsText = products
-      .map(p => `• ${p.name} - £${p.price}`)
-      .join('\n');
-    
-    sections.push({
-      "type": "section",
-      "fields": [
-        {
-          "type": "mrkdwn",
-          "text": `*${category}*\n${itemsText}`
-        }
-      ]
-    });
-  }
-  
-  return sections;
-}
-```
-
-### Basket Summary
-
-```javascript
-async function showBasket(basket) {
-  const blocks = [
-    {
-      "type": "section",
-      "text": {
-        "type": "mrkdwn",
-        "text": `*🛒 Your Basket*\n\n*${basket.total_quantity} items* | *£${basket.total_cost}*`
-      }
-    },
-    {"type": "divider"}
-  ];
-  
-  // Group items
-  basket.products.slice(0, 10).forEach(item => {
-    blocks.push({
-      "type": "section",
-      "text": {
-        "type": "mrkdwn",
-        "text": `*${item.quantity}x* ${item.name}\n£${item.unit_price} each`
-      },
-      "accessory": {
-        "type": "button",
-        "text": {"type": "plain_text", "text": "Remove"},
-        "action_id": `remove_${item.item_id}`,
-        "style": "danger"
-      }
-    });
-  });
-  
-  if (basket.products.length > 10) {
-    blocks.push({
-      "type": "context",
-      "elements": [{
-        "type": "mrkdwn",
-        "text": `... and ${basket.products.length - 10} more items`
-      }]
-    });
-  }
-  
-  blocks.push({
-    "type": "actions",
-    "elements": [
-      {
-        "type": "button",
-        "text": {"type": "plain_text", "text": "Checkout"},
-        "action_id": "checkout",
-        "style": "primary"
-      },
-      {
-        "type": "button",
-        "text": {"type": "plain_text", "text": "Clear Basket"},
-        "action_id": "clear_basket",
-        "style": "danger"
-      }
-    ]
-  });
-  
-  await sendBlocks(blocks);
-}
-```
-
-### Delivery Slots
-
-```javascript
-async function showDeliverySlots(slots) {
-  const blocks = [
-    {
-      "type": "header",
-      "text": {"type": "plain_text", "text": "📅 Available Delivery Slots"}
-    }
-  ];
-  
-  slots.forEach(slot => {
-    blocks.push({
-      "type": "section",
-      "text": {
-        "type": "mrkdwn",
-        "text": `*${slot.date}*\n${slot.startTime} - ${slot.endTime}\n£${slot.price}`
-      },
-      "accessory": {
-        "type": "button",
-        "text": {"type": "plain_text", "text": "Book This"},
-        "action_id": `book_${slot.id}`,
-        "style": "primary"
-      }
-    });
-  });
-  
-  await sendBlocks(blocks);
-}
-```
-
----
-
-## Dietary Preferences (Optional Agent Logic)
-
-If your agent implements meal planning, you can add preference handling.
-
-### Configuration
-
-Load preferences when user mentions dietary requirements:
-
-```typescript
-const preferences = {
-  dietary_restrictions: ["vegetarian", "gluten-free"],
-  dislikes: ["mushrooms", "olives"],
-  budget: {weekly: 50},
-  household_size: 2
-};
-
-savePreferences(preferences);
-```
-
-### Special Sourcing Example
-
-Some users need specific sourcing (halal, kosher, local farms):
-
-```typescript
-const preferences = {
-  dietary_restrictions: ["halal"],
-  external_sources: {
-    meat: "halal_butcher",
-    note: "Exclude non-halal meat from Sainsbury's"
-  },
-  sainsburys_excludes: ["beef", "lamb", "chicken", "turkey"]
-};
-```
-
-### Filter Search Results
-
-```typescript
-async function searchWithPreferences(query, preferences) {
-  // Search Sainsbury's
-  const result = await bash(`cd skills/sainsburys-cli && npm run groc search "${query}" --json`);
-  const products = JSON.parse(result);
-  
-  // Filter based on preferences
-  const filtered = products.products.filter(product => {
-    // Example: exclude restricted items
-    if (preferences.sainsburys_excludes) {
-      for (const excluded of preferences.sainsburys_excludes) {
-        if (product.name.toLowerCase().includes(excluded)) {
-          return false;
-        }
-      }
-    }
-    return true;
-  });
-  
-  return filtered;
-}
-```
-
-### Split Shopping Lists
-
-For users with external sourcing needs:
-
-```typescript
-async function generateShoppingList(meals, preferences) {
-  const sainsburys = [];
-  const external = {};
-  
-  for (const meal of meals) {
-    for (const ingredient of meal.ingredients) {
-      // Check if should be sourced externally
-      const externalSource = shouldSourceExternally(ingredient, preferences);
-      
-      if (externalSource) {
-        if (!external[externalSource]) external[externalSource] = [];
-        external[externalSource].push({
-          item: ingredient,
-          meal: meal.name
-        });
-      } else {
-        sainsburys.push(ingredient);
-      }
-    }
-  }
-  
-  return {sainsburys, external};
-}
-```
-
-### Display Split Lists (Block Kit)
-
-```javascript
+```json
 {
-  "type": "section",
-  "fields": [
-    {
-      "type": "mrkdwn",
-      "text": "*From Sainsbury's:*\n• Pasta\n• Tomatoes\n• Onions\n• Herbs"
-    },
-    {
-      "type": "mrkdwn",
-      "text": "*From Other Sources:*\n• Local Farm: Eggs\n• Halal Butcher: Chicken\n_(Purchased separately)_"
+  "mcpServers": {
+    "groceries": {
+      "command": "npx",
+      "args": ["-y", "open-supermarkets", "mcp"]
     }
-  ]
-}
-```
-
-**Note:** This is your agent's logic, not CLI functionality. The CLI just provides product search and ordering.
-
----
-
-## Error Handling
-
-### Session Expired
-
-```typescript
-try {
-  await bash("cd skills/sainsburys-cli && npm run groc basket --json");
-} catch (error) {
-  if (error.includes("401") || error.includes("403")) {
-    await say("Session expired. Let me log you in again...");
-    await bash(`cd skills/sainsburys-cli && npm run groc login --email ${EMAIL} --password ${PASSWORD}`);
-    // Retry
-    await bash("cd skills/sainsburys-cli && npm run groc basket --json");
   }
 }
 ```
 
-### Product Not Found
+Prefer batch tools for multi-item shopping:
 
-```typescript
-const result = await bash(`cd skills/sainsburys-cli && npm run groc search "${ingredient}" --json`);
-const products = JSON.parse(result);
+- `grocery_search_batch`
+- `grocery_basket_add_batch`
 
-if (products.products.length === 0) {
-  await say(`Couldn't find "${ingredient}". Can you be more specific? (e.g., brand, size)`);
-  const clarification = await waitForResponse();
-  // Retry search
-}
-```
+This reduces process/tool overhead and keeps context smaller than one call per ingredient.
 
-### Out of Stock
+### CLI
 
-```typescript
-const product = products.products[0];
-
-if (!product.in_stock) {
-  await say(`${product.name} is out of stock. Here are alternatives:`);
-  const alternatives = products.products.slice(1, 4);
-  // Show alternatives
-}
-```
-
----
-
-## Performance Tips
-
-### Cache Product Searches
-
-```typescript
-const searchCache = new Map();
-
-async function searchProduct(query) {
-  if (searchCache.has(query)) {
-    return searchCache.get(query);
-  }
-  
-  const result = await bash(`cd skills/sainsburys-cli && npm run groc search "${query}" --json`);
-  const products = JSON.parse(result);
-  
-  searchCache.set(query, products);
-  setTimeout(() => searchCache.delete(query), 60 * 60 * 1000); // 1 hour
-  
-  return products;
-}
-```
-
-### Batch Basket Operations
-
-```typescript
-// Instead of:
-for (const item of items) {
-  await bash(`npm run groc add ${item.id} --qty ${item.qty}`);
-}
-
-// Do:
-await Promise.all(
-  items.map(item => 
-    bash(`npm run groc add ${item.id} --qty ${item.qty}`)
-  )
-);
-```
-
----
-
-## MCP Server (Future)
-
-Could be wrapped as an MCP server:
-
-```typescript
-// server.ts
-import { Server } from "@modelcontextprotocol/sdk/server/index.js";
-
-const server = new Server({
-  name: "sainsburys-groceries",
-  version: "1.0.0"
-}, {
-  capabilities: {
-    tools: {}
-  }
-});
-
-server.setRequestHandler("tools/list", async () => ({
-  tools: [
-    {
-      name: "sainsburys_search",
-      description: "Search Sainsbury's products",
-      inputSchema: {
-        type: "object",
-        properties: {
-          query: { type: "string" },
-          limit: { type: "number" }
-        }
-      }
-    },
-    {
-      name: "sainsburys_add_to_basket",
-      description: "Add product to basket",
-      inputSchema: {
-        type: "object",
-        properties: {
-          productId: { type: "string" },
-          quantity: { type: "number" }
-        }
-      }
-    }
-    // ... more tools
-  ]
-}));
-
-server.setRequestHandler("tools/call", async (request) => {
-  const { name, arguments: args } = request.params;
-  
-  switch (name) {
-    case "sainsburys_search":
-      return await search(args.query, args.limit);
-    case "sainsburys_add_to_basket":
-      return await addToBasket(args.productId, args.quantity);
-  }
-});
-```
-
----
-
-## Testing Your Integration
-
-### 1. Test Basic Commands
+For shell-capable agents:
 
 ```bash
-cd skills/sainsburys-cli
-npm run groc search "test"
-npm run groc basket
+supermarket providers
+supermarket search "olive oil" --country ES --limit 5 --json
+supermarket --provider tesco basket --json
 ```
 
-### 2. Test From Agent
+The canonical command is `supermarket`; `open-supermarkets` is an npm-friendly alias.
 
-```typescript
-// In your agent code
-const result = await bash("cd skills/sainsburys-cli && npm run groc search 'milk' --json");
-console.log(JSON.parse(result));
+### HTTP
+
+Use `supermarket-api` for agents that have network access but cannot execute local commands.
+
+Keep it loopback-only unless an API token is configured.
+
+## Capabilities
+
+Providers are capability-based, not all-or-nothing.
+
+Typical capabilities are:
+
+- search
+- basket
+- slots
+- checkout
+- orders
+
+A search-only provider is valid and useful. Agents must not assume every provider supports basket or checkout.
+
+Use `supermarket providers` or the registry to inspect the current capability matrix.
+
+## Provider selection
+
+Prefer explicit provider/country context.
+
+Examples:
+
+```bash
+supermarket search "milk" --country NL --json
+supermarket search "leche" --country ES --json
+supermarket --provider tesco-hu search "tej" --json
 ```
 
-### 3. Test Full Workflow
+For multi-retailer comparison, compare providers in the same relevant market. Do not compare store-scoped/local pricing as though it were national pricing.
 
-```typescript
-// Login
-await bash("cd skills/sainsburys-cli && npm run groc login --email test@example.com --password test123");
+## Product selection
 
-// Search and add
-const products = await bash("cd skills/sainsburys-cli && npm run groc search 'milk' --json");
-const firstProduct = JSON.parse(products).products[0];
-await bash(`cd skills/sainsburys-cli && npm run groc add ${firstProduct.product_uid} --qty 2`);
+Search returns candidates. The agent should use user context such as:
 
-// View basket
-const basket = await bash("cd skills/sainsburys-cli && npm run groc basket --json");
-console.log(JSON.parse(basket));
+- requested item;
+- pack size;
+- quantity;
+- budget;
+- dietary constraints;
+- preferred brands;
+- intended recipe;
+- household size.
+
+Do not choose solely by the first result or lowest absolute price if pack size makes that misleading.
+
+## Availability semantics
+
+Do not interpret missing/unknown availability as explicitly out of stock.
+
+Where the provider contract exposes an unknown state, handle it separately:
+
+```ts
+if (product.in_stock === false) {
+  // explicitly unavailable
+} else if (product.in_stock === true) {
+  // explicitly available
+} else {
+  // availability unknown
+}
 ```
 
----
+## Basket and checkout safety
 
-## Example Integrations
+Basket writes change server-side state, so avoid unnecessary parallel mutation.
 
-### OpenClaw
+Checkout must remain explicit. Open Supermarkets previews checkout by default and requires an explicit confirmation path before spending money.
 
-```typescript
-// skills/sainsburys-groceries/SKILL.md loaded automatically
+Agents should always:
 
-// Agent uses natural language
-user: "plan meals for this week"
+1. show the selected products;
+2. show quantities and totals;
+3. surface substitutions or uncertainty;
+4. obtain explicit approval before placing an order.
 
-agent: 
-  → loads skill
-  → asks constraints
-  → suggests meals
-  → searches Sainsbury's
-  → builds basket
-  → checks out
-```
+## Authentication
 
-### Pi Agent (Slack)
+Auth differs by provider:
 
-```typescript
-// data/skills/sainsburys-groceries/SKILL.md
+- some catalogues need no account;
+- some use anonymous guest tokens;
+- some use official API keys/OAuth;
+- some use account credentials;
+- some require browser-imported sessions.
 
-// In meal-planning channel
-await bash("cd skills/sainsburys-groceries && npm run groc search 'milk' --json");
+Do not invent a login flow. Follow the provider manifest/auth instructions.
 
-// Show results with Block Kit
-await sendBlocks(productBlocks);
-```
+## Errors
 
----
+An empty search result means the retailer returned a legitimate empty result.
 
-## Support
+Authentication failures, WAF/bot challenges, malformed upstream responses and rate limits should be surfaced as errors and not converted into empty product lists.
 
-**Issues:** GitHub issues  
-**Docs:** README.md, SKILL.md, AGENTS.md  
-**Examples:** See `/examples` directory
+## Nutrition and allergens
 
----
+`--enrich` can add data from Open Food Facts.
 
-**Happy agent building! 🤖**
+Treat enrichment as auxiliary metadata, especially for allergies. Prefer exact product identity when available and do not present fuzzy matches as authoritative.
+
+## Provider-specific skills
+
+Provider-specific notes live in `skills/`, including:
+
+- Sainsbury's
+- Tesco
+- Ocado
+- Tesco Magyarország
+
+Additional providers can still be used through the common CLI/library even when they do not need a dedicated skill file.
+
+## Developer references
+
+- [README.md](README.md)
+- [SKILL.md](SKILL.md)
+- [docs/API.md](docs/API.md)
+- [docs/PROVIDER-SPEC.md](docs/PROVIDER-SPEC.md)
+- [CONTRIBUTING.md](CONTRIBUTING.md)
+
+The registry is the source of truth for provider coverage and capabilities.
