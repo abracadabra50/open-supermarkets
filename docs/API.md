@@ -57,7 +57,7 @@ interface Product {
     measure: string;        // Unit (L, kg, etc.)
     price: number;          // Price per unit
   };
-  in_stock: boolean;        // Availability
+  in_stock: boolean | null; // true: available; false: explicitly unavailable; null: no reliable signal
   image_url?: string;       // Product image
   provider: string;         // Provider name (sainsburys, ocado)
 }
@@ -390,9 +390,11 @@ if (products.length === 0) {
 ```typescript
 const product = await provider.getProduct('357937');
 
-if (!product.in_stock) {
+if (product.in_stock === false) {
   console.log('Product out of stock');
   // Find alternative
+} else if (product.in_stock === null) {
+  console.log('Stock status unknown; check with the retailer before buying');
 }
 ```
 

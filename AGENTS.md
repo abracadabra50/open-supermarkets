@@ -445,10 +445,12 @@ if (products.products.length === 0) {
 ```typescript
 const product = products.products[0];
 
-if (!product.in_stock) {
+if (product.in_stock === false) {
   await say(`${product.name} is out of stock. Here are alternatives:`);
   const alternatives = products.products.slice(1, 4);
   // Show alternatives
+} else if (product.in_stock === null) {
+  await say(`${product.name} has no reliable stock signal. Check with the retailer before buying.`);
 }
 ```
 

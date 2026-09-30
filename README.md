@@ -174,8 +174,10 @@ checkout needs an account, address and payment method, so it exists for fewer.
 `supermarket providers` prints this live from the registry. The manifest is the source
 of truth rather than a hand-maintained marketing claim. Lidl Ireland supports
 CLI, HTTP, and MCP search, but no basket or checkout operations.
-Lidl Plus loyalty prices are not substituted for regular prices, and missing stock
-signals remain unknown.
+Lidl Plus loyalty prices are not substituted for regular prices. Product availability
+uses three states: `in_stock: true` means available, `false` means explicitly
+unavailable, and `null` means the retailer provided no reliable stock signal.
+Batch search exposes the same states as `inStock`.
 
 Ocado slot booking and checkout are blocked by AWS WAF. Reading slots works; committing
 to one does not. The manifest therefore does not claim those capabilities.
