@@ -4,7 +4,7 @@
 
 ### The open-source grocery interface for humans and AI agents
 
-**Search live products and prices, compare retailers, build baskets and check out safely<br>across eleven providers in seven countries.**
+**Search live products and prices across 12 provider IDs in eight countries.<br>Compare retailers, build baskets and check out where supported.**
 
 **CLI · HTTP API · MCP · Agent Skills**
 
@@ -12,14 +12,14 @@
 
 [![npm](https://img.shields.io/npm/v/open-supermarkets?color=CB3837&logo=npm&logoColor=white)](https://www.npmjs.com/package/open-supermarkets)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
-[![Countries](https://img.shields.io/badge/countries-7-2ea44f)](#what-works-where)
-[![Providers](https://img.shields.io/badge/providers-11-2ea44f)](#what-works-where)
-[![No credentials](https://img.shields.io/badge/3%20countries-no%20credentials-orange)](#what-works-where)
+[![Countries](https://img.shields.io/badge/countries-8-2ea44f)](#what-works-where)
+[![Providers](https://img.shields.io/badge/provider%20IDs-12-2ea44f)](#what-works-where)
+[![No credentials](https://img.shields.io/badge/4%20countries-no%20credentials-orange)](#what-works-where)
 [![CI](https://github.com/abracadabra50/open-supermarkets/actions/workflows/ci.yml/badge.svg)](https://github.com/abracadabra50/open-supermarkets/actions/workflows/ci.yml)
 [![MCP](https://img.shields.io/badge/MCP-22%20tools-6E56CF)](#connect-an-agent)
 [![Stars](https://img.shields.io/github/stars/abracadabra50/open-supermarkets?style=flat&color=yellow)](https://github.com/abracadabra50/open-supermarkets/stargazers)
 
-🇬🇧 &nbsp;🇳🇱 &nbsp;🇧🇪 &nbsp;🇪🇸 &nbsp;🇭🇺 &nbsp;🇺🇸 &nbsp;🇨🇦 &nbsp;&nbsp;·&nbsp;&nbsp; [**your country next?**](#bring-your-supermarket)
+🇬🇧 &nbsp;🇮🇪 &nbsp;🇳🇱 &nbsp;🇧🇪 &nbsp;🇪🇸 &nbsp;🇭🇺 &nbsp;🇺🇸 &nbsp;🇨🇦 &nbsp;&nbsp;·&nbsp;&nbsp; [**your country next?**](#bring-your-supermarket)
 
 </div>
 
@@ -161,6 +161,7 @@ checkout needs an account, address and payment method, so it exists for fewer.
 | Tesco | 🇬🇧 | ✓ | ✓ | ✓ | ✓ | browser session |
 | Sainsbury's | 🇬🇧 | ✓ | ✓ | ✓ | ✓ | email + password |
 | Ocado | 🇬🇧 | ✓ | ✓ | read-only | — | email + password |
+| Lidl Ireland | 🇮🇪 | ✓ | — | — | — | none |
 | Albert Heijn | 🇳🇱 | ✓ | — | — | — | **none** |
 | Albert Heijn België | 🇧🇪 | ✓ | — | — | — | **none** |
 | Mercadona | 🇪🇸 | ✓ | — | — | — | **none** |
@@ -171,7 +172,12 @@ checkout needs an account, address and payment method, so it exists for fewer.
 | Tesco Magyarország | 🇭🇺 | ✓ | ✓ | — | — | browser session (basket only) |
 
 `supermarket providers` prints this live from the registry. The manifest is the source
-of truth rather than a hand-maintained marketing claim.
+of truth rather than a hand-maintained marketing claim. Lidl Ireland supports
+CLI, HTTP, and MCP search, but no basket or checkout operations.
+Lidl Plus loyalty prices are not substituted for regular prices. Product availability
+uses three states: `in_stock: true` means available, `false` means explicitly
+unavailable, and `null` means the retailer provided no reliable stock signal.
+Batch search exposes the same states as `inStock`.
 
 Ocado slot booking and checkout are blocked by AWS WAF. Reading slots works; committing
 to one does not. The manifest therefore does not claim those capabilities.

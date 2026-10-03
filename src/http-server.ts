@@ -3,6 +3,7 @@
 import http from 'node:http';
 import { URL } from 'node:url';
 import { ProviderFactory, ProviderName } from './providers';
+import { createProvider } from './providers/registry';
 import type { FullGroceryProvider, SearchOptions } from './providers/types';
 
 type FavouritesProvider = FullGroceryProvider & {
@@ -85,14 +86,15 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
     });
   }
 
-  const provider = getProvider(url);
-
   if (url.pathname === '/search') {
     const q = requireQuery(url, 'q');
     const limit = parsePositiveInt(url.searchParams.get('limit'), 'limit', 24);
+    const provider = await createProvider(url.searchParams.get('provider') || defaultProvider);
     const products = await provider.search(q, { limit });
     return sendJson(res, 200, { products });
   }
+
+  const provider = getProvider(url);
 
   if (url.pathname === '/add') {
     const id = url.searchParams.get('id') || url.searchParams.get('q');

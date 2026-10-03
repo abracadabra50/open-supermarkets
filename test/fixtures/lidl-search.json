@@ -1,0 +1,40 @@
+{
+  "numFound": 2,
+  "offset": 0,
+  "fetchsize": 10,
+  "items": [
+    {
+      "gridbox": {
+        "data": {
+          "id": "lidl-2001",
+          "fullTitle": "Milbona Fresh Milk 2L",
+          "canonicalUrl": "/p/milbona-fresh-milk-2l/p10001",
+          "image": "https://img.example.test/milk.jpg",
+          "price": { "price": 2.25 },
+          "regionsPrices": {
+            "1": {
+              "currentPrice": { "price": 2.25 },
+              "currentLidlPlusPrice": { "price": { "price": 1.99, "oldPrice": 2.25 } }
+            }
+          },
+          "pricePerUnit": { "price": 1.13, "unit": "1 L" },
+          "packaging": "2 L",
+          "stockAvailability": { "badgeInfo": { "badges": [] } }
+        }
+      }
+    },
+    {
+      "gridbox": {
+        "data": {
+          "productId": "lidl-2002",
+          "fullTitle": "Vemondo Oat Drink 1L",
+          "canonicalUrl": "/p/vemondo-oat-drink/p10002",
+          "price": { "price": "€1.49" },
+          "stockAvailability": {
+            "badgeInfo": { "badges": [ { "text": "Out of stock" } ] }
+          }
+        }
+      }
+    }
+  ]
+}

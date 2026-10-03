@@ -57,11 +57,23 @@ interface Product {
     measure: string;        // Unit (L, kg, etc.)
     price: number;          // Price per unit
   };
-  in_stock: boolean;        // Availability
+  in_stock: boolean | null; // true: available; false: explicitly unavailable; null: no reliable signal
   image_url?: string;       // Product image
   provider: string;         // Provider name (sainsburys, ocado)
 }
 ```
+
+Availability is a three-state contract across providers:
+
+| `in_stock` / batch `inStock` | Meaning |
+|----------------------------|---------|
+| `true` | In stock |
+| `false` | Explicitly out of stock |
+| `null` | Retailer did not provide a reliable stock signal |
+
+Use strict equality when branching on stock. `!product.in_stock` conflates
+unavailable and unknown; `product.in_stock === false` identifies only explicit
+out-of-stock signals. Lean batch results preserve `null` in `inStock`.
 
 ### Basket
 
@@ -385,14 +397,18 @@ if (products.length === 0) {
 }
 ```
 
-### Out of Stock
+### Product Availability
 
 ```typescript
 const product = await provider.getProduct('357937');
 
-if (!product.in_stock) {
+if (product.in_stock === true) {
+  console.log('Product in stock');
+} else if (product.in_stock === false) {
   console.log('Product out of stock');
   // Find alternative
+} else if (product.in_stock === null) {
+  console.log('Stock status unknown; check with the retailer before buying');
 }
 ```
 
