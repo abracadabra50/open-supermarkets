@@ -471,7 +471,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       const formatted = products.map((p: any, i: number) => {
-        const stock = p.in_stock ? 'In stock' : 'Out of stock';
+        const stock = p.in_stock === true ? 'In stock' : p.in_stock === false ? 'Out of stock' : 'Stock unknown';
         const unitPrice = p.unit_price ? ` (${p.unit_price.price}/${p.unit_price.measure})` : '';
         return `${i + 1}. ${p.name}\n   ${money(p.retail_price.price, p.currency)}${unitPrice} | ${stock} | ID: ${p.product_uid}`;
       }).join('\n\n');
@@ -497,7 +497,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       const formatted = products.map((p: any, i: number) => {
-        const stock = p.in_stock ? 'In stock' : 'Out of stock';
+        const stock = p.in_stock === true ? 'In stock' : p.in_stock === false ? 'Out of stock' : 'Stock unknown';
         const unitPrice = p.unit_price ? ` (${p.unit_price.price}/${p.unit_price.measure})` : '';
         return `${i + 1}. ${p.name}\n   ${money(p.retail_price.price, p.currency)}${unitPrice} | ${stock} | ID: ${p.product_uid}`;
       }).join('\n\n');
@@ -538,7 +538,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       const formatted = products.map((p: any, i: number) => {
-        const stock = p.in_stock ? 'In stock' : 'Out of stock';
+        const stock = p.in_stock === true ? 'In stock' : p.in_stock === false ? 'Out of stock' : 'Stock unknown';
         const unitPrice = p.unit_price ? ` (${p.unit_price.price}/${p.unit_price.measure})` : '';
         return `${i + 1}. ${p.name}\n   ${money(p.retail_price.price, p.currency)}${unitPrice} | ${stock} | ID: ${p.product_uid}`;
       }).join('\n\n');

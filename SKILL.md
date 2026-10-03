@@ -129,6 +129,25 @@ Trigger when users:
 
 ---
 
+## Product Availability
+
+Search results use three stock states. JSON uses `in_stock`; lean batch search
+uses `inStock`. Both fields have the same meaning:
+
+| Value | Meaning | Agent action |
+|-------|---------|--------------|
+| `true` | In stock | Treat as available according to the retailer's signal |
+| `false` | Explicitly out of stock | Offer alternatives |
+| `null` | Retailer did not provide a reliable signal | Report stock as unknown and ask the user to check with the retailer |
+
+Use strict checks (`=== true`, `=== false`, `=== null`). Do not treat a falsy
+value as proof that a product is out of stock. Filtering with `=== true` selects
+only confirmed available products; excluded products can be unavailable or unknown.
+Lidl Ireland supports search only, so catalogue results cannot be added to a basket
+or checked out through this provider.
+
+---
+
 ## Example Agent Workflows
 
 ### Meal Planning

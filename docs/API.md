@@ -63,6 +63,18 @@ interface Product {
 }
 ```
 
+Availability is a three-state contract across providers:
+
+| `in_stock` / batch `inStock` | Meaning |
+|----------------------------|---------|
+| `true` | In stock |
+| `false` | Explicitly out of stock |
+| `null` | Retailer did not provide a reliable stock signal |
+
+Use strict equality when branching on stock. `!product.in_stock` conflates
+unavailable and unknown; `product.in_stock === false` identifies only explicit
+out-of-stock signals. Lean batch results preserve `null` in `inStock`.
+
 ### Basket
 
 ```typescript
@@ -385,12 +397,14 @@ if (products.length === 0) {
 }
 ```
 
-### Out of Stock
+### Product Availability
 
 ```typescript
 const product = await provider.getProduct('357937');
 
-if (product.in_stock === false) {
+if (product.in_stock === true) {
+  console.log('Product in stock');
+} else if (product.in_stock === false) {
   console.log('Product out of stock');
   // Find alternative
 } else if (product.in_stock === null) {
