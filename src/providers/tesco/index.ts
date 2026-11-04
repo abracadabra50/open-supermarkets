@@ -77,6 +77,41 @@ export function normaliseProduct(p: any, provider: string = 'tesco'): Product {
     };
   }
 
+/** In-store stock for one product at one Tesco store (#7). */
+export interface StoreStock {
+  product: Product;
+  /** The store asked about; null means the session's store, or Tesco's default. */
+  store_id: string | null;
+  /**
+   * Shelf stock as Tesco reports it. `not_ranged` = the store does not sell it;
+   * `unknown` = Tesco said UNKNOWN or gave a value we don't recognise.
+   */
+  stock: 'in_stock' | 'low_stock' | 'out_of_stock' | 'not_ranged' | 'unknown';
+  /** Aisle numbers/names, de-duplicated, in Tesco's order. Empty when unknown. */
+  aisles: string[];
+}
+
+const STOCK_LEVELS: Record<string, StoreStock['stock']> = {
+  IN_STOCK: 'in_stock',
+  LOW_STOCK: 'low_stock',
+  OUT_OF_STOCK: 'out_of_stock',
+  UNKNOWN: 'unknown',
+};
+
+export function normaliseStoreStock(p: any, storeId?: string): StoreStock {
+  const status = p?.availability?.status;
+  const stock: StoreStock['stock'] =
+    p?.availability === null || p?.status === 'ProductNotFound'
+      ? 'not_ranged'
+      : STOCK_LEVELS[String(status)] ?? 'unknown';
+  const aisles = [...new Set<string>(
+    (Array.isArray(p?.productLocation) ? p.productLocation : [])
+      .map((l: any) => (l?.aisle === undefined || l?.aisle === null ? '' : String(l.aisle).trim()))
+      .filter(Boolean)
+  )];
+  return { product: normaliseProduct(p), store_id: storeId ?? null, stock, aisles };
+}
+
 export class TescoProvider implements GroceryProvider {
   readonly name = 'tesco';
   private api: TescoAPI;
@@ -136,6 +171,33 @@ export class TescoProvider implements GroceryProvider {
 
   async getCategories(): Promise<any> {
     return this.api.getCategories();
+  }
+
+  /**
+   * With an explicit store, stock needs no account, so send no cookies: an
+   * expired session would otherwise turn a public read into "Unauthorized".
+   * Without one, the session decides which store Tesco answers for.
+   */
+  private stockApi(storeId?: string): TescoAPI {
+    return storeId ? new TescoAPI() : this.api;
+  }
+
+  /**
+   * In-store stock and aisle for products at a store (#7). Read-only and
+   * works without an account. Without `storeId`, Tesco uses the session's
+   * store, or its default when there is no session.
+   */
+  async storeStock(productIds: string[], storeId?: string): Promise<StoreStock[]> {
+    const raw = await this.stockApi(storeId).getStoreStock(productIds, storeId);
+    return raw.map((p, i) => p
+      ? normaliseStoreStock(p, storeId)
+      : { product: normaliseProduct({ id: productIds[i] }), store_id: storeId ?? null, stock: 'unknown', aisles: [] });
+  }
+
+  /** Search a store's range, with stock and aisle per result. */
+  async searchStoreStock(query: string, options: { limit?: number; storeId?: string } = {}): Promise<StoreStock[]> {
+    const raw = await this.stockApi(options.storeId).searchStoreStock(query, options.limit ?? 10, options.storeId);
+    return raw.map((p) => normaliseStoreStock(p, options.storeId));
   }
 
   // ─────────────────────────────────────────────────────────
