@@ -13,8 +13,12 @@
  * in the codebase needs to know it exists.
  */
 
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 import type {
   Capability,
+  Extra,
   GroceryProvider,
   ProviderManifest,
 } from './types';
@@ -27,6 +31,9 @@ export const PROVIDERS: ProviderManifest[] = [
     country: 'GB',
     capabilities: ['search', 'basket', 'slots', 'checkout', 'orders'],
     auth: 'credentials',
+    session: '.sainsburys/session.json',
+    searchNeedsSession: true,
+    extras: ['login', 'favourites', 'categories'],
     tier: 'core',
     maintainer: 'abracadabra50',
     load: async () => (await import('./sainsburys')).SainsburysProvider,
@@ -40,6 +47,9 @@ export const PROVIDERS: ProviderManifest[] = [
     // Declaring a capability we cannot deliver is worse than declaring none.
     capabilities: ['search', 'basket', 'slots', 'orders'],
     auth: 'credentials',
+    session: '.ocado/session.json',
+    searchNeedsSession: true,
+    extras: ['login', 'favourites', 'categories', 'browse', 'regulars'],
     tier: 'core',
     maintainer: 'abracadabra50',
     load: async () => (await import('./ocado')).OcadoProvider,
@@ -50,6 +60,11 @@ export const PROVIDERS: ProviderManifest[] = [
     country: 'GB',
     capabilities: ['search', 'basket', 'slots', 'checkout', 'orders'],
     auth: 'session-cookie',
+    session: '.tesco/session.json',
+    searchNeedsSession: true,
+    // Scripted login exists but is usually bot-blocked; import-session is the
+    // reliable path, which is why auth is session-cookie.
+    extras: ['login', 'categories', 'staples'],
     tier: 'core',
     maintainer: 'abracadabra50',
     load: async () => (await import('./tesco/index')).TescoProvider,
@@ -100,6 +115,7 @@ export const PROVIDERS: ProviderManifest[] = [
     country: 'ES',
     capabilities: ['search'],
     auth: 'none',
+    extras: ['categories'],
     tier: 'core',
     maintainer: 'abracadabra50',
     credit: 'Open REST catalogue + the storefront\'s public Algolia search key',
@@ -127,6 +143,8 @@ export const PROVIDERS: ProviderManifest[] = [
     // (add one item, read it back, remove it, totals restored).
     capabilities: ['search', 'basket'],
     auth: 'session-cookie',
+    session: '.tesco-hu/session.json',
+    extras: ['categories'],
     tier: 'community',
     maintainer: 'benedek',
     credit:
@@ -253,6 +271,108 @@ export function supports(id: string, capability: Capability): boolean {
 
 export function assertCapability(id: string, capability: Capability): void {
   if (!supports(id, capability)) throw new MissingCapabilityError(id, capability);
+}
+
+export class MissingExtraError extends Error {
+  constructor(providerId: string, extra: Extra) {
+    super(
+      `${providerId} does not support ${extra}.\n` +
+        `Run \`supermarket providers\` to see what it can do.`
+    );
+    this.name = 'MissingExtraError';
+  }
+}
+
+export class MissingSessionError extends Error {
+  constructor(readonly providerId: string) {
+    super(`Not logged in to ${providerId}. ${loginHint(providerId)}`);
+    this.name = 'MissingSessionError';
+  }
+}
+
+/** Provider ids, optionally filtered. Loads no provider code. */
+export function providerIds(opts: ListOptions = {}): string[] {
+  return list(opts).map((p) => p.id);
+}
+
+export function supportsExtra(id: string, extra: Extra): boolean {
+  return getManifest(id).extras?.includes(extra) ?? false;
+}
+
+/** Absolute path of the provider's stored login, if it keeps one on disk. */
+export function sessionFile(id: string): string | undefined {
+  const rel = getManifest(id).session;
+  return rel ? path.join(os.homedir(), rel) : undefined;
+}
+
+/** true/false for providers with a session file; undefined when there is none to check. */
+export function hasSession(id: string): boolean | undefined {
+  const file = sessionFile(id);
+  return file ? fs.existsSync(file) : undefined;
+}
+
+/** How to get authenticated with this provider, from its manifest. */
+export function loginHint(id: string): string {
+  const m = getManifest(id);
+  if (m.auth === 'none' || m.auth === 'anonymous') return 'No login is needed.';
+  if (m.auth === 'session-cookie' && m.session) {
+    return `Import a browser session: \`supermarket --provider ${id} import-session --help\`.`;
+  }
+  if (m.extras?.includes('login')) {
+    return `Log in with \`supermarket --provider ${id} login\` (MCP: grocery_login with provider "${id}").`;
+  }
+  return 'Set its credentials in the environment; see `supermarket providers`.';
+}
+
+/** Account-only extras: these always need the stored login when there is one. */
+const ACCOUNT_EXTRAS = new Set<Extra>(['favourites', 'regulars', 'staples']);
+
+/** What an operation needs from a provider. */
+export interface Need {
+  capability: Capability;
+  extra?: Extra;
+}
+
+/** Does this operation need the stored login? False when there is no session file to check. */
+export function needsSession(id: string, need: Need): boolean {
+  const m = getManifest(id);
+  if (!m.session) return false;
+  if (need.extra === 'login') return false;
+  if (need.extra && ACCOUNT_EXTRAS.has(need.extra)) return true;
+  return need.capability === 'search' ? m.searchNeedsSession === true : true;
+}
+
+/**
+ * Check an operation against the manifest before any provider code loads or
+ * any request is made: unknown id, missing capability, missing extra, and
+ * (when `session` is set) a missing stored login. Throws the matching error.
+ */
+export function checkAccess(id: string, need: Need, opts: { session?: boolean } = {}): ProviderManifest {
+  const m = getManifest(id);
+  if (!m.capabilities.includes(need.capability)) throw new MissingCapabilityError(id, need.capability);
+  if (need.extra && !m.extras?.includes(need.extra)) throw new MissingExtraError(id, need.extra);
+  if (opts.session && needsSession(id, need) && !hasSession(id)) throw new MissingSessionError(id);
+  return m;
+}
+
+/** checkAccess, then load and construct the provider. */
+export async function openProvider(
+  id: string,
+  need: Need,
+  opts: { session?: boolean } = {}
+): Promise<GroceryProvider> {
+  checkAccess(id, need, opts);
+  return createProvider(id);
+}
+
+/** True for the errors checkAccess throws: the request is wrong, not the retailer. */
+export function isAccessError(err: unknown): boolean {
+  return (
+    err instanceof UnknownProviderError ||
+    err instanceof MissingCapabilityError ||
+    err instanceof MissingExtraError ||
+    err instanceof MissingSessionError
+  );
 }
 
 /** Instantiate a provider, importing its module only now. */

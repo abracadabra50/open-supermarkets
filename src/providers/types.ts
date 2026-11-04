@@ -141,6 +141,18 @@ export type AuthModel =
   | 'credentials'    // email + password, scriptable
   | 'session-cookie';// login is bot-protected; needs a cookie from a real browser
 
+/**
+ * Features only some providers have. Declared in the manifest so every
+ * interface can refuse them before loading provider code.
+ */
+export type Extra =
+  | 'login'       // scripted email + password login (supermarket login)
+  | 'favourites'  // the account's favourites list, and search within it
+  | 'categories'  // category tree
+  | 'browse'      // list products in a category path
+  | 'regulars'    // Ocado "Regulars"
+  | 'staples';    // Tesco repeat-purchase staples from order history
+
 export type ProviderTier =
   | 'core'       // maintained here, exercised in CI
   | 'community'; // contributed; best-effort, owned by its maintainer
@@ -160,6 +172,16 @@ export interface ProviderManifest {
   maintainer?: string;
   /** Where the protocol knowledge came from, if it was reverse-engineered elsewhere. */
   credit?: string;
+  /**
+   * Where a stored login lives, relative to the home directory, e.g.
+   * '.sainsburys/session.json'. Interfaces check for it before any work that
+   * needs an account. Omit when auth comes from env vars or there is none.
+   */
+  session?: string;
+  /** Search also needs that stored login. Default: search does not. */
+  searchNeedsSession?: boolean;
+  /** Provider-specific features beyond the shared capabilities. */
+  extras?: Extra[];
   /**
    * Dynamic import. Deliberately a thunk: the registry can list and filter every
    * provider without loading any of their code. A user in the UK never parses

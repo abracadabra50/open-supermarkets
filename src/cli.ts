@@ -1,15 +1,17 @@
 #!/usr/bin/env node
 
 import { Command } from 'commander';
-import { ProviderFactory, ProviderName, compareProduct } from './providers';
+import { compareProduct } from './providers';
 import {
   list as listProviders,
   resolveCountry,
   countries as knownCountries,
   providersFor,
   createProvider,
+  checkAccess,
+  type Need,
 } from './providers/registry';
-import type { Capability } from './providers/types';
+import type { Capability, FullGroceryProvider } from './providers/types';
 import { money, byPrice, cheapest, dealCandidates, stockLabel } from './format';
 import { explain } from './errors';
 // Tesco is imported as a *type only* — a value import here would pull Playwright
@@ -48,10 +50,15 @@ function parsePositiveInt(value: string, name: string): number {
   return n;
 }
 
-// Helper to get provider from options
-function getProvider(options: any) {
+/**
+ * Resolve the provider for a command. The manifest is checked first, so an
+ * unknown id or an unsupported command fails before any provider code loads
+ * or any request is made. Login is left to the provider, as before.
+ */
+async function getProvider(options: any, need: Need): Promise<FullGroceryProvider> {
   const providerName = options.provider || program.opts().provider;
-  const provider = ProviderFactory.create(providerName as ProviderName);
+  checkAccess(providerName, need);
+  const provider = (await createProvider(providerName)) as FullGroceryProvider;
   provider.allowOrderAmend?.(Boolean(options.amend ?? program.opts().amend));
   return provider;
 }
@@ -88,7 +95,7 @@ program
         console.error('❌ Email and password required. Use --email/--password or set SUPERMARKET_EMAIL/SUPERMARKET_PASSWORD.');
         process.exit(1);
       }
-      const provider = getProvider(cmd.optsWithGlobals());
+      const provider = await getProvider(cmd.optsWithGlobals(), { capability: 'search', extra: 'login' });
       await provider.login(email, password);
       console.log(`✅ Logged in to ${provider.name}`);
     } catch (error: any) {
@@ -103,7 +110,7 @@ program
   .description('Logout from supermarket account')
   .action(async (options, cmd) => {
     try {
-      const provider = getProvider(cmd.optsWithGlobals());
+      const provider = await getProvider(cmd.optsWithGlobals(), { capability: 'search' });
       await provider.logout();
       console.log(`✅ Logged out from ${provider.name}`);
     } catch (error: any) {
@@ -120,7 +127,7 @@ program
   .action(async (options, cmd) => {
     try {
       const providerName = cmd.optsWithGlobals().provider;
-      const provider = getProvider(cmd.optsWithGlobals());
+      const provider = await getProvider(cmd.optsWithGlobals(), { capability: 'search' });
       const sessionInfo =
         providerName === 'tesco'
           ? (await import('./providers/tesco/auth')).getSessionInfo()
@@ -261,7 +268,7 @@ program
   .option('--json', 'Output as JSON')
   .action(async (options, cmd) => {
     try {
-      const provider: any = getProvider(cmd.optsWithGlobals());
+      const provider: any = await getProvider(cmd.optsWithGlobals(), { capability: 'search', extra: 'favourites' });
       if (typeof provider.getFavourites !== 'function') {
         throw new Error(`Provider "${provider.name}" does not support favourites`);
       }
@@ -286,7 +293,7 @@ program
   .option('--json', 'Output as JSON')
   .action(async (options, cmd) => {
     try {
-      const provider = getProvider(cmd.optsWithGlobals());
+      const provider = await getProvider(cmd.optsWithGlobals(), { capability: 'search', extra: 'categories' });
       const cats = await provider.getCategories();
       if (options.json) {
         console.log(JSON.stringify({ categories: cats }, null, 2));
@@ -310,7 +317,7 @@ program
   .option('--json', 'Output as JSON')
   .action(async (categoryPath, options, cmd) => {
     try {
-      const provider: any = getProvider(cmd.optsWithGlobals());
+      const provider: any = await getProvider(cmd.optsWithGlobals(), { capability: 'search', extra: 'browse' });
       if (typeof provider.browseCategory !== 'function') {
         throw new Error(`Provider "${provider.name}" does not support category browsing`);
       }
@@ -336,7 +343,7 @@ program
   .option('--json', 'Output as JSON')
   .action(async (query, options, cmd) => {
     try {
-      const provider = getProvider(cmd.optsWithGlobals());
+      const provider = await getProvider(cmd.optsWithGlobals(), { capability: 'search' });
       const limit = parsePositiveInt(options.limit, 'limit');
       const products = await provider.search(query, { limit: 50 });
       // Known out-of-stock and unknown-price items can't be a deal. Unknown
@@ -368,7 +375,7 @@ program
   .option('--json', 'Output as JSON')
   .action(async (options, cmd) => {
     try {
-      const provider: any = getProvider(cmd.optsWithGlobals());
+      const provider: any = await getProvider(cmd.optsWithGlobals(), { capability: 'search', extra: 'regulars' });
       if (typeof provider.getRegulars !== 'function') {
         throw new Error(`Provider "${provider.name}" does not support regulars`);
       }
@@ -396,7 +403,7 @@ program
   .option('--json', 'Output as JSON')
   .action(async (query, options, cmd) => {
     try {
-      const provider: any = getProvider(cmd.optsWithGlobals());
+      const provider: any = await getProvider(cmd.optsWithGlobals(), { capability: 'search', extra: 'favourites' });
       if (typeof provider.searchFavourites !== 'function') {
         throw new Error(`Provider "${provider.name}" does not support favourite search`);
       }
@@ -470,7 +477,7 @@ program
   .option('--json', 'Output as JSON')
   .action(async (options, cmd) => {
     try {
-      const provider = getProvider(cmd.optsWithGlobals());
+      const provider = await getProvider(cmd.optsWithGlobals(), { capability: 'basket' });
       const basket = await provider.getBasket();
       
       if (options.json) {
@@ -504,7 +511,7 @@ program
   .option('--batch <file>', 'Add many at once. JSON [{id,qty}], or - for stdin')
   .action(async (productId, options, cmd) => {
     try {
-      const provider = getProvider(cmd.optsWithGlobals());
+      const provider = await getProvider(cmd.optsWithGlobals(), { capability: 'basket' });
 
       if (options.batch) {
         const { batchAdd, parseAddInput } = await import('./batch');
@@ -537,7 +544,7 @@ program
   .description('Remove item from basket')
   .action(async (itemId, options, cmd) => {
     try {
-      const provider = getProvider(cmd.optsWithGlobals());
+      const provider = await getProvider(cmd.optsWithGlobals(), { capability: 'basket' });
       await provider.removeFromBasket(itemId);
       console.log(`✅ Removed from ${provider.name} basket`);
     } catch (error: any) {
@@ -553,7 +560,7 @@ program
   .option('--json', 'Output as JSON')
   .action(async (options, cmd) => {
     try {
-      const provider = getProvider(cmd.optsWithGlobals());
+      const provider = await getProvider(cmd.optsWithGlobals(), { capability: 'slots' });
       const slots = await provider.getDeliverySlots();
       
       if (options.json) {
@@ -579,7 +586,7 @@ program
   .description('Book delivery slot')
   .action(async (slotId, options, cmd) => {
     try {
-      const provider = getProvider(cmd.optsWithGlobals());
+      const provider = await getProvider(cmd.optsWithGlobals(), { capability: 'slots' });
       await provider.bookSlot(slotId);
       console.log(`✅ Slot booked with ${provider.name}`);
     } catch (error: any) {
@@ -602,7 +609,7 @@ program
   .option('--dry-run', 'Preview only (the default; kept for explicitness)')
   .action(async (options, cmd) => {
     try {
-      const provider = getProvider(cmd.optsWithGlobals());
+      const provider = await getProvider(cmd.optsWithGlobals(), { capability: 'checkout' });
       const placing = options.confirm === true;
 
       if (!placing) {
@@ -634,7 +641,7 @@ program
   .option('--limit <number>', 'Max orders to show', '10')
   .action(async (options, cmd) => {
     try {
-      const provider = getProvider(cmd.optsWithGlobals());
+      const provider = await getProvider(cmd.optsWithGlobals(), { capability: 'orders' });
       const orders = await provider.getOrders();
       
       if (options.json) {
@@ -687,7 +694,7 @@ program
   .description('Update quantity of a basket item')
   .action(async (itemId, quantity, options, cmd) => {
     try {
-      const provider = getProvider((cmd as any).optsWithGlobals());
+      const provider = await getProvider((cmd as any).optsWithGlobals(), { capability: 'basket' });
       await provider.updateBasketItem(itemId, parseInt(quantity));
       console.log(`✅ Updated item ${itemId} to qty ${quantity}`);
     } catch (error: any) {
@@ -707,7 +714,7 @@ program
         console.log('⚠️  Use --force to confirm clearing the basket');
         process.exit(0);
       }
-      const provider = getProvider(cmd.optsWithGlobals());
+      const provider = await getProvider(cmd.optsWithGlobals(), { capability: 'basket' });
       await provider.clearBasket();
       console.log(`✅ Basket cleared`);
     } catch (error: any) {
@@ -911,7 +918,7 @@ program
       const { updateStaples, loadStaples, printStaples, addStaplesToBasket } =
         await import('./providers/tesco/staples');
 
-      const provider = getProvider(cmd.optsWithGlobals()) as TescoProvider;
+      const provider = (await getProvider(cmd.optsWithGlobals(), { capability: 'search', extra: 'staples' })) as TescoProvider;
       const api = provider.getAPI();
 
       let staples = loadStaples();

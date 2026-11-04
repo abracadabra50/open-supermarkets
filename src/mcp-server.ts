@@ -13,9 +13,16 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
-import { ProviderFactory, ProviderName, compareProduct } from './providers/index.js';
-import { createProvider, getManifest, supports } from './providers/registry.js';
-import type { FullGroceryProvider, Capability } from './providers/types.js';
+import { compareProduct } from './providers/index.js';
+import {
+  PROVIDERS,
+  checkAccess,
+  createProvider,
+  hasSession,
+  isAccessError,
+} from './providers/registry.js';
+import { TOOL_ROUTES, eligibleProviders } from './mcp-routes.js';
+import type { FullGroceryProvider } from './providers/types.js';
 import { money, stockLabel, cheapest } from './format.js';
 import { explain } from './errors.js';
 import * as fs from 'fs';
@@ -33,36 +40,13 @@ const server = new Server(
   }
 );
 
-const PROVIDERS: ProviderName[] = ['sainsburys', 'ocado', 'tesco', 'tesco-hu', 'migros'];
-
-// Session directories per provider
-const SESSION_PATHS: Record<ProviderName, string> = {
-  sainsburys: `${os.homedir()}/.sainsburys/session.json`,
-  ocado: `${os.homedir()}/.ocado/session.json`,
-  tesco: `${os.homedir()}/.tesco/session.json`,
-  'tesco-hu': `${os.homedir()}/.tesco-hu/session.json`,
-};
-
-/** Providers whose catalogue search works with no session at all. */
-const ANONYMOUS_SEARCH = new Set<ProviderName>(['tesco-hu', 'lidl-ie']);
-
-function isLoggedIn(provider: ProviderName): boolean {
-  return fs.existsSync(SESSION_PATHS[provider]);
-}
-
-function requireLogin(provider: ProviderName): string | null {
-  // Anonymous providers (Migros' guest basket) keep their own session; there is nothing to log in to.
-  if (getManifest(provider).auth === 'anonymous') return null;
-  if (!isLoggedIn(provider)) {
-    return `Not logged in to ${provider}. Use grocery_login with provider "${provider}" first.`;
-  }
-  return null;
-}
-
-function getProvider(name: ProviderName, amend = false): FullGroceryProvider {
-  const provider = ProviderFactory.create(name);
-  provider.allowOrderAmend?.(amend);
-  return provider;
+/** One line per provider for status/providers, without loading any of them. */
+function authStatus(id: string): string {
+  const m = PROVIDERS.find((p) => p.id === id)!;
+  const stored = hasSession(id);
+  if (stored !== undefined) return stored ? 'logged in' : 'not logged in';
+  if (m.auth === 'none' || m.auth === 'anonymous') return 'no login needed';
+  return 'credentials from environment';
 }
 
 function textResult(text: string, isError = false) {
@@ -90,12 +74,21 @@ const amendProp = {
     'Leave false; if the tool says the basket is an order in amend mode, ask the user before retrying with true.',
 };
 
-const providerEnum = { type: 'string', enum: PROVIDERS, description: 'Supermarket provider: sainsburys, ocado, tesco, tesco-hu (Hungary), or migros (Switzerland, guest basket)' };
-const searchProviderEnum = { type: 'string', enum: [...PROVIDERS, 'lidl-ie'], description: 'Search provider, including Lidl Ireland (search only)' };
+// The enum is filled per tool from TOOL_ROUTES when tools are listed.
+const providerEnum = { type: 'string', description: 'Provider id (see grocery_providers)' };
+
+function withProviderEnum<T extends { name: string; inputSchema: any }>(tool: T): T {
+  const prop = tool.inputSchema?.properties?.provider;
+  if (!prop) return tool;
+  const ids = eligibleProviders(tool.name);
+  const provider = { ...prop, enum: ids, description: `${prop.description}. One of: ${ids.join(', ')}` };
+  if (!ids.includes(provider.default)) delete provider.default;
+  return { ...tool, inputSchema: { ...tool.inputSchema, properties: { ...tool.inputSchema.properties, provider } } };
+}
 
 server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
-    tools: [
+    tools: (<any[]>[
       // ── Authentication ──
       {
         name: 'grocery_login',
@@ -123,7 +116,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         inputSchema: {
           type: 'object',
           properties: {
-            provider: { ...searchProviderEnum, default: 'sainsburys' },
+            provider: { ...providerEnum, default: 'sainsburys' },
             query: { type: 'string', description: 'Search term (e.g., "milk", "organic eggs", "chicken breast")' },
             limit: { type: 'integer', minimum: 1, maximum: 100, description: 'Maximum results to return (default: 10, maximum: 100)', default: 10 },
           },
@@ -152,7 +145,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         inputSchema: {
           type: 'object',
           properties: {
-            provider: { ...searchProviderEnum, default: 'sainsburys' },
+            provider: { ...providerEnum, default: 'sainsburys' },
             queries: {
               type: 'array',
               items: { type: 'string' },
@@ -377,7 +370,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         description: 'List all available supermarket providers and their login status.',
         inputSchema: { type: 'object', properties: {} },
       },
-    ],
+    ]).map(withProviderEnum),
   };
 });
 
@@ -385,56 +378,48 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
 
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args = {} } = request.params;
-  const providerName = ((args as any).provider || 'sainsburys') as ProviderName;
+  const providerName: string = (args as any).provider || 'sainsburys';
 
   try {
-    // Search-only providers cannot use the legacy authenticated operations.
-    // Reject before constructing a provider or making a retailer request.
-    const catalogueTool = name === 'grocery_search' || name === 'grocery_search_batch';
-    const providerSpecificTool = name === 'ocado_regulars' || name === 'tesco_staples';
-    const globalTool = name === 'grocery_status' || name === 'grocery_providers' || name === 'grocery_compare';
-    const toolCapabilities: Record<string, Capability> = {
-      grocery_basket_view: 'basket', grocery_basket_add: 'basket',
-      grocery_basket_remove: 'basket', grocery_basket_update: 'basket',
-      grocery_basket_clear: 'basket', grocery_basket_add_batch: 'basket',
-      grocery_slots: 'slots', grocery_book_slot: 'slots',
-      grocery_checkout: 'checkout', grocery_orders: 'orders',
+    // Every check that can fail without the retailer runs here, from the
+    // manifest, before provider code loads: unknown id, missing capability,
+    // missing extra, missing stored login.
+    const route = TOOL_ROUTES[name];
+    const target = route?.fixed ?? providerName;
+    if (route) {
+      try {
+        checkAccess(target, route.need, { session: true });
+      } catch (err) {
+        if (isAccessError(err)) return textResult((err as Error).message, true);
+        throw err;
+      }
+    }
+    const getProvider = async (amend = false): Promise<FullGroceryProvider> => {
+      const provider = (await createProvider(target)) as FullGroceryProvider;
+      provider.allowOrderAmend?.(amend);
+      return provider;
     };
-    const requiredCapability = toolCapabilities[name];
-    if (requiredCapability && !supports(providerName, requiredCapability)) {
-      return textResult(`Provider "${providerName}" does not support ${name}. Missing capability: ${requiredCapability}.`, true);
-    }
-    if (!catalogueTool && !globalTool && !providerSpecificTool &&
-        getManifest(providerName).capabilities.every(capability => capability === 'search')) {
-      return textResult(`Provider "${providerName}" does not support ${name}. Catalogue search only.`, true);
-    }
-    if (!globalTool && !providerSpecificTool && name !== 'grocery_login' &&
-        (!catalogueTool || !ANONYMOUS_SEARCH.has(providerName))) {
-      const loginError = requireLogin(providerName);
-      if (loginError) return textResult(loginError, true);
-    }
 
     // ── grocery_login ──
     if (name === 'grocery_login') {
       const { email, password } = args as { email: string; password: string };
-      const provider = getProvider(providerName);
+      const provider = await getProvider();
       await provider.login(email, password);
       return textResult(`Logged in to ${providerName} successfully. Session saved.`);
     }
 
     // ── grocery_status ──
     if (name === 'grocery_status') {
-      const statuses = PROVIDERS.map(p => `${p}: ${isLoggedIn(p) ? 'logged in' : 'not logged in'}`);
+      const statuses = PROVIDERS.map(p => `${p.id}: ${authStatus(p.id)}`);
       return textResult(`Authentication status:\n${statuses.join('\n')}`);
     }
 
     // ── grocery_providers ──
     if (name === 'grocery_providers') {
-      const info = PROVIDERS.map(p => {
-        const loggedIn = isLoggedIn(p);
-        return `- ${p}: ${loggedIn ? 'logged in' : 'not logged in'}`;
-      });
-      info.push('- lidl-ie: no login required (search only)');
+      const info = PROVIDERS.map(p =>
+        `- ${p.id} (${p.label}, ${p.country}): ${p.capabilities.join('/')}` +
+        `${p.extras?.length ? ` + ${p.extras.join('/')}` : ''}; ${authStatus(p.id)}`
+      );
       return textResult(`Available providers:\n${info.join('\n')}`);
     }
 
@@ -444,7 +429,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const limit = searchLimit(args.limit, 5);
       if (!queries.length) return textResult('Give me at least one query.', true);
       const { batchSearch } = await import('./batch.js');
-      const provider = await createProvider(providerName);
+      const provider = await getProvider();
       const results = await batchSearch(provider, queries, { limit });
       return textResult(JSON.stringify({ provider: providerName, results }, null, 2));
     }
@@ -453,7 +438,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const { items = [] } = args as { items?: Array<{ id: string; qty?: number }> };
       if (!items.length) return textResult('Give me at least one item.', true);
       const { batchAdd } = await import('./batch.js');
-      const provider = getProvider(providerName);
+      const provider = await getProvider();
       const results = await batchAdd(provider, items);
       const added = results.filter(r => r.ok).length;
       return textResult(
@@ -481,16 +466,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       return textResult(`Price comparison for "${query}":\n\n${sections.join('\n\n')}`);
     }
 
-    // All remaining tools require login
-    const loginError = providerSpecificTool || (catalogueTool && ANONYMOUS_SEARCH.has(providerName)) ? null : requireLogin(providerName);
-
     // ── grocery_search ──
     if (name === 'grocery_search') {
-      // Search can sometimes work without login for some providers, but check anyway
-      if (loginError && !ANONYMOUS_SEARCH.has(providerName)) return textResult(loginError, true);
       const { query } = args as { query: string };
       const limit = searchLimit(args.limit, 10);
-      const provider = await createProvider(providerName);
+      const provider = await getProvider();
       const results = await provider.search(query, { limit });
       const limited = results.slice(0, limit);
 
@@ -507,9 +487,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
     // ── grocery_favourites ──
     if (name === 'grocery_favourites') {
-      if (loginError) return textResult(loginError, true);
       const { limit = 50 } = args as { limit?: number };
-      const provider: any = getProvider(providerName);
+      const provider: any = await getProvider();
 
       if (typeof provider.getFavourites !== 'function') {
         return textResult(`Provider "${providerName}" does not support favourites.`, true);
@@ -533,9 +512,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
     // ── grocery_favourites_search ──
     if (name === 'grocery_favourites_search') {
-      if (loginError) return textResult(loginError, true);
       const { query, limit = 24 } = args as { query: string; limit?: number };
-      const provider: any = getProvider(providerName);
+      const provider: any = await getProvider();
 
       if (typeof provider.searchFavourites !== 'function') {
         return textResult(`Provider "${providerName}" does not support favourite search.`, true);
@@ -559,8 +537,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
     // ── grocery_categories ──
     if (name === 'grocery_categories') {
-      if (loginError) return textResult(loginError, true);
-      const provider: any = getProvider(providerName);
+      const provider: any = await getProvider();
 
       if (typeof provider.getCategories !== 'function') {
         return textResult(`Provider "${providerName}" does not support category browsing.`, true);
@@ -574,9 +551,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
     // ── grocery_browse ──
     if (name === 'grocery_browse') {
-      if (loginError) return textResult(loginError, true);
       const { category_path, limit = 50 } = args as { category_path: string; limit?: number };
-      const provider: any = getProvider(providerName);
+      const provider: any = await getProvider();
 
       if (typeof provider.browseCategory !== 'function') {
         return textResult(`Provider "${providerName}" does not support category browsing.`, true);
@@ -600,9 +576,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
     // ── ocado_regulars ──
     if (name === 'ocado_regulars') {
-      const ocadoLoginError = requireLogin('ocado');
-      if (ocadoLoginError) return textResult(ocadoLoginError, true);
-      const provider: any = getProvider('ocado');
+      const provider: any = await getProvider();
 
       if (typeof provider.getRegulars !== 'function') {
         return textResult('Ocado provider does not support regulars.', true);
@@ -619,8 +593,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
     // ── grocery_basket_view ──
     if (name === 'grocery_basket_view') {
-      if (loginError) return textResult(loginError, true);
-      const provider = getProvider(providerName);
+      const provider = await getProvider();
       const basket = await provider.getBasket();
 
       const amendNote = basket.amend
@@ -643,43 +616,38 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
     // ── grocery_basket_add ──
     if (name === 'grocery_basket_add') {
-      if (loginError) return textResult(loginError, true);
       const { product_id, quantity = 1 } = args as { product_id: string; quantity?: number };
-      const provider = getProvider(providerName, (args as any).amend === true);
+      const provider = await getProvider((args as any).amend === true);
       await provider.addToBasket(product_id, quantity);
       return textResult(`Added ${quantity}x product ${product_id} to ${providerName} basket.`);
     }
 
     // ── grocery_basket_remove ──
     if (name === 'grocery_basket_remove') {
-      if (loginError) return textResult(loginError, true);
       const { product_id } = args as { product_id: string };
-      const provider = getProvider(providerName, (args as any).amend === true);
+      const provider = await getProvider((args as any).amend === true);
       await provider.removeFromBasket(product_id);
       return textResult(`Removed product ${product_id} from ${providerName} basket.`);
     }
 
     // ── grocery_basket_update ──
     if (name === 'grocery_basket_update') {
-      if (loginError) return textResult(loginError, true);
       const { item_id, quantity } = args as { item_id: string; quantity: number };
-      const provider = getProvider(providerName, (args as any).amend === true);
+      const provider = await getProvider((args as any).amend === true);
       await provider.updateBasketItem(item_id, quantity);
       return textResult(`Updated item ${item_id} to quantity ${quantity} in ${providerName} basket.`);
     }
 
     // ── grocery_basket_clear ──
     if (name === 'grocery_basket_clear') {
-      if (loginError) return textResult(loginError, true);
-      const provider = getProvider(providerName, (args as any).amend === true);
+      const provider = await getProvider((args as any).amend === true);
       await provider.clearBasket();
       return textResult(`${providerName} basket cleared.`);
     }
 
     // ── grocery_slots ──
     if (name === 'grocery_slots') {
-      if (loginError) return textResult(loginError, true);
-      const provider = getProvider(providerName);
+      const provider = await getProvider();
       const slots = await provider.getDeliverySlots();
 
       if (slots.length === 0) {
@@ -696,18 +664,16 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
     // ── grocery_book_slot ──
     if (name === 'grocery_book_slot') {
-      if (loginError) return textResult(loginError, true);
       const { slot_id } = args as { slot_id: string };
-      const provider = getProvider(providerName);
+      const provider = await getProvider();
       await provider.bookSlot(slot_id);
       return textResult(`Slot ${slot_id} booked at ${providerName}.`);
     }
 
     // ── grocery_checkout ──
     if (name === 'grocery_checkout') {
-      if (loginError) return textResult(loginError, true);
       const { dry_run = true } = args as { dry_run?: boolean };
-      const provider = getProvider(providerName);
+      const provider = await getProvider();
       const order = await provider.checkout(dry_run);
 
       if (dry_run) {
@@ -723,9 +689,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
     // ── grocery_orders ──
     if (name === 'grocery_orders') {
-      if (loginError) return textResult(loginError, true);
       const { limit = 10 } = args as { limit?: number };
-      const provider = getProvider(providerName);
+      const provider = await getProvider();
       const orders = await provider.getOrders();
 
       if (orders.length === 0) {
@@ -747,14 +712,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
     // ── tesco_staples ──
     if (name === 'tesco_staples') {
-      const tescoLoginError = requireLogin('tesco');
-      if (tescoLoginError) return textResult(tescoLoginError, true);
-
       const { action = 'view' } = args as { action?: string };
-      const { TescoProvider } = await import('./providers/tesco/index.js');
       const { updateStaples, loadStaples, addStaplesToBasket } = await import('./providers/tesco/staples.js');
 
-      const tesco = new TescoProvider();
+      const tesco = (await getProvider()) as unknown as import('./providers/tesco/index.js').TescoProvider;
       const api = tesco.getAPI();
 
       let staples = loadStaples();
@@ -792,7 +753,7 @@ async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
   console.error('Open Supermarkets MCP Server v2.1.0 running on stdio');
-  console.error(`Providers: ${[...PROVIDERS, 'lidl-ie (search only)'].join(', ')}`);
+  console.error(`Providers: ${PROVIDERS.map(p => p.id).join(', ')}`);
 }
 
 main().catch((error) => {

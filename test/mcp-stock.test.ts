@@ -25,6 +25,8 @@ async function main() {
   const originalCreate = ProviderFactory.create;
   const manifest = getManifest('sainsburys');
   const originalLoad = manifest.load;
+  const ocadoManifest = getManifest('ocado');
+  const originalOcadoLoad = ocadoManifest.load;
   const originalFetch = globalThis.fetch;
   const originalHttpRequest = http.request;
   const originalHttpsRequest = https.request;
@@ -35,14 +37,21 @@ async function main() {
   let connection: Promise<void> | undefined;
   const client = new Client({ name: 'stock-regression', version: '1.0.0' });
   try {
-    fs.existsSync = ((path: fs.PathLike) => String(path).endsWith('/.sainsburys/session.json') || originalExists(path)) as typeof fs.existsSync;
+    fs.existsSync = ((path: fs.PathLike) => String(path).endsWith('/.sainsburys/session.json') || String(path).endsWith('/.ocado/session.json') || originalExists(path)) as typeof fs.existsSync;
     ProviderFactory.create = (() => provider) as unknown as typeof ProviderFactory.create;
     // Replace the registry loader, not an imported class prototype. Node 20
     // can load a separate ESM class through the registry's dynamic import.
-    manifest.load = async () => class {
-      readonly name = 'sainsburys';
+    // Every MCP tool routes through the registry, so the fixture class carries
+    // each list-returning method. Browse is an Ocado extra in the manifest.
+    const fixture = (name: string) => class {
+      readonly name = name;
       async search() { searchCalls++; return products; }
+      async getFavourites() { return products; }
+      async searchFavourites() { return products; }
+      async browseCategory() { return products; }
     };
+    manifest.load = async () => fixture('sainsburys');
+    ocadoManifest.load = async () => fixture('ocado');
     globalThis.fetch = async () => { throw new Error('Unexpected retailer fetch'); };
     http.request = (() => { throw new Error('Unexpected HTTP request'); }) as typeof http.request;
     https.request = (() => { throw new Error('Unexpected HTTPS request'); }) as typeof https.request;
@@ -56,7 +65,7 @@ async function main() {
     await client.connect(clientTransport);
     for (const name of ['grocery_search', 'grocery_favourites', 'grocery_favourites_search', 'grocery_browse']) {
       const result = await client.callTool({ name, arguments: {
-        provider: 'sainsburys', query: 'milk', category_path: 'dairy',
+        provider: name === 'grocery_browse' ? 'ocado' : 'sainsburys', query: 'milk', category_path: 'dairy',
       } });
       assert.notEqual(result.isError, true, `${name} should succeed: ${JSON.stringify(result.content)}`);
       const text = (result.content as Array<{ text: string }>).map(item => item.text).join('\n');
@@ -70,6 +79,7 @@ async function main() {
     fs.existsSync = originalExists;
     ProviderFactory.create = originalCreate;
     manifest.load = originalLoad;
+    ocadoManifest.load = originalOcadoLoad;
     globalThis.fetch = originalFetch;
     http.request = originalHttpRequest;
     https.request = originalHttpsRequest;
