@@ -11,6 +11,7 @@
  */
 
 import type { Basket, BasketItem, GroceryProvider, Product, SearchOptions } from '../types';
+import { sumKnown, toPrice, toStock } from '../normalise';
 import { TescoHuAPI, TescoHuSessionError, TESCO_HU, sessionHelp } from './api';
 import { clearSession, getCookieString, loadSession } from './session';
 
@@ -42,10 +43,9 @@ export function normaliseProduct(p: any, provider: string = TESCO_HU.id): Produc
       : undefined;
 
   // `status` is authoritative when present. Without it fall back to isForSale.
-  // The Product interface has no "unknown", so an absent field reads as not in
-  // stock rather than as available — never claim stock we did not see.
+  // With neither, stock is unknown: never claim stock we did not see.
   const inStock =
-    typeof p?.status === 'string' ? p.status === 'AvailableForSale' : p?.isForSale === true;
+    typeof p?.status === 'string' ? p.status === 'AvailableForSale' : toStock(p?.isForSale);
 
   const stats = p?.reviews?.stats;
   const crumbs = [p?.departmentName, p?.aisleName].filter(Boolean);
@@ -54,7 +54,7 @@ export function normaliseProduct(p: any, provider: string = TESCO_HU.id): Produc
     product_uid: String(p?.id ?? p?.tpnc ?? ''),
     name: String(p?.title ?? 'Unknown product'),
     description: crumbs.length ? crumbs.join(' / ') : undefined,
-    retail_price: { price: Number(price.actual ?? 0) },
+    retail_price: { price: toPrice(price.actual) },
     unit_price: unitPrice,
     in_stock: inStock,
     image_url: p?.defaultImageUrl || undefined,
@@ -68,15 +68,15 @@ export function normaliseProduct(p: any, provider: string = TESCO_HU.id): Produc
 function normaliseBasketItem(item: any): BasketItem {
   const product = item?.product ?? {};
   const quantity = Number(item?.quantity ?? 1);
-  const unitPrice = Number(product?.price?.actual ?? 0);
-  const cost = item?.cost;
+  const unitPrice = toPrice(product?.price?.actual);
+  const cost = toPrice(item?.cost);
   return {
     item_id: String(item?.id ?? ''),
     product_uid: String(product?.id ?? product?.tpnb ?? ''),
     name: String(product?.title ?? 'Unknown item'),
     quantity,
     unit_price: unitPrice,
-    total_price: cost !== undefined && cost !== null ? Number(cost) : unitPrice * quantity,
+    total_price: cost ?? (unitPrice !== null ? unitPrice * quantity : null),
   };
 }
 
@@ -93,7 +93,7 @@ export function normaliseBasket(data: any, provider: string = TESCO_HU.id): Bask
   return {
     items: normalised,
     total_quantity: totalItems,
-    total_cost: Number(view?.totalPrice ?? 0),
+    total_cost: toPrice(view?.totalPrice) ?? sumKnown(normalised.map((i) => i.total_price)),
     provider,
     currency: TESCO_HU.currency,
   };

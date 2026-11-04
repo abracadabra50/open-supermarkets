@@ -27,6 +27,7 @@
 
 import axios, { AxiosInstance } from 'axios';
 import type { Product, SearchOptions } from './types';
+import { toPrice } from './normalise';
 
 const API_BASE = 'https://api.kroger.com';
 const TOKEN_PATH = '/v1/connect/oauth2/token';
@@ -171,7 +172,14 @@ export class KrogerProvider {
     const item = p.items?.[0];
     // Promo price is 0 when there is no promotion, so treat 0 as "no promo".
     const promo = item?.price?.promo;
-    const price = promo && promo > 0 ? promo : item?.price?.regular ?? 0;
+    const price = promo && promo > 0 ? promo : toPrice(item?.price?.regular);
+    // Inventory only comes back when a store (locationId) is in scope. Without
+    // it, or with a level we don't recognise, stock is unknown, not HIGH.
+    const level = item?.inventory?.stockLevel;
+    const inStock =
+      level === 'TEMPORARILY_OUT_OF_STOCK' ? false
+        : level === 'HIGH' || level === 'LOW' ? true
+        : null;
 
     const images = p.images?.[0]?.sizes ?? [];
     const image =
@@ -185,7 +193,7 @@ export class KrogerProvider {
       // prepend when genuinely absent. Same trap as Mercadona.
       name: KrogerProvider.label(p),
       retail_price: { price },
-      in_stock: (item?.inventory?.stockLevel ?? 'HIGH') !== 'TEMPORARILY_OUT_OF_STOCK',
+      in_stock: inStock,
       image_url: image,
       provider: this.name,
       currency: 'USD',

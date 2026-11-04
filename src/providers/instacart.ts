@@ -63,8 +63,9 @@ export class InstacartProvider {
       {
         product_uid: `instacart:${query}`,
         name: query,
-        retail_price: { price: 0 },
-        in_stock: true,
+        // Resolved by Instacart when the list is opened; unknown until then.
+        retail_price: { price: null },
+        in_stock: null,
         provider: this.name,
         currency: 'USD',
         description:
@@ -88,11 +89,11 @@ export class InstacartProvider {
         product_uid: `instacart:${item.name}`,
         name: item.name,
         quantity: item.quantity ?? 1,
-        unit_price: 0,
-        total_price: 0,
+        unit_price: null,
+        total_price: null,
       })),
       total_quantity: this.pending.reduce((n, i) => n + (i.quantity ?? 1), 0),
-      total_cost: 0,
+      total_cost: this.pending.length ? null : 0,
       provider: this.name,
     };
   }

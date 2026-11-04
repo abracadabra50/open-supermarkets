@@ -102,7 +102,9 @@ await check('normalises basket totals, quantities, CHF and item types without in
   assert.equal(basket.total_cost, 8.5);
   assert.equal(basket.currency, 'CHF');
   assert.equal(basket.items[0].total_price, 6.5);
-  assert.equal(basket.items[1].unit_price, 0);
+  // No product card for the promotion line: its price is unknown, not 0.
+  assert.equal(basket.items[1].unit_price, null);
+  assert.equal(basket.items[1].total_price, null);
   assert.equal(basket.items[1].item_id, '202');
 });
 

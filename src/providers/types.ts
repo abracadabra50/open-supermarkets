@@ -4,14 +4,21 @@ export interface Product {
   product_uid: string;
   name: string;
   description?: string;
+  /**
+   * `price` is null when the retailer gave no usable price. Never 0: zero
+   * means free. Consumers must treat null as "unknown", not as cheapest.
+   */
   retail_price: {
-    price: number;
+    price: number | null;
   };
   unit_price?: {
     measure: string;
     price: number;
   };
-  /** Unknown when the retailer supplies no reliable stock signal. */
+  /**
+   * true = the retailer says it can be bought, false = it says it can't,
+   * null = it didn't say. Never turn a missing signal into true or false.
+   */
   in_stock: boolean | null;
   image_url?: string;
   provider: string; // sainsburys, ocado, tesco, etc.
@@ -57,14 +64,16 @@ export interface BasketItem {
   product_uid: string;
   name: string;
   quantity: number;
-  unit_price: number;
-  total_price: number;
+  /** null when the retailer does not expose reliable line pricing. */
+  unit_price: number | null;
+  total_price: number | null;
 }
 
 export interface Basket {
   items: BasketItem[];
   total_quantity: number;
-  total_cost: number;
+  /** null when the retailer gives no total and any line price is unknown. */
+  total_cost: number | null;
   provider: string;
   /** ISO 4217. Absent means GBP, like Product.currency. Non-UK providers must set it. */
   currency?: string;

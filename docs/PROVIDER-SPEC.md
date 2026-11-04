@@ -59,7 +59,9 @@ Non-GBP providers must set `currency` using ISO 4217.
 
 Never use `0` to mean "price unavailable".
 
-If no valid regular retail price can be established, omit/drop the product or surface a protocol error according to the upstream response. Do not silently convert missing or malformed price data into a free item.
+If no valid regular retail price can be established, set `retail_price.price` to `null` (use `toPrice()` from `src/providers/normalise.ts`). Drop the product or surface a protocol error instead if the whole record is unusable. Do not silently convert missing or malformed price data into a free item.
+
+The same applies to basket lines: `unit_price`, `total_price` and `total_cost` are `null` when the retailer does not expose them. Only sum line prices into a total when every line is known (`sumKnown()`).
 
 Loyalty/member pricing must not replace regular retail pricing unless the shared contract explicitly represents the distinction. If both are later supported, they need separate fields with explicit semantics.
 
@@ -67,15 +69,13 @@ Store-scoped pricing must not be represented as national pricing. The provider m
 
 ### Availability
 
-Availability has three logical states even if the current public type is narrower:
+Availability has three states, and `in_stock: boolean | null` represents all three:
 
 1. explicitly available;
 2. explicitly unavailable;
 3. unknown / not supplied reliably.
 
-A provider must not convert state 3 into state 2.
-
-If the public type cannot represent the upstream truth, change the shared contract deliberately and migrate all consumers that branch on it.
+State 3 is `null`. A provider must not convert it into state 1 or state 2: `x !== false` and `x === true` on an absent field are both bugs. Use `toStock()` for plain boolean flags.
 
 ### Identity
 

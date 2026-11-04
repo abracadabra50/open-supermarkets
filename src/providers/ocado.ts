@@ -4,6 +4,7 @@ import * as os from 'os';
 import * as path from 'path';
 import * as readline from 'readline';
 import { GroceryProvider, Product, Basket, BasketItem, DeliverySlot, Order, SearchOptions } from './types';
+import { perUnit, sumKnown, toPrice, toStock } from './normalise';
 
 /**
  * Ocado provider — rebuilt 2026-07 against Ocado's current internal web-app
@@ -182,11 +183,11 @@ export function normaliseEntity(e: any, provider: string = 'ocado'): Product {
     product_uid: e.productId,
     name: e.name,
     description: e.brand ? `Brand: ${e.brand}` : undefined,
-    retail_price: { price: price ?? 0 },
+    retail_price: { price: price !== undefined && price >= 0 ? price : null },
     unit_price: unit !== undefined
       ? { measure: e?.size?.value ?? '', price: unit }
       : undefined,
-    in_stock: e.available !== false,
+    in_stock: toStock(e.available),
     image_url: e?.image ? `${BASE_URL}${e.image}` : undefined,
     provider,
     rating,
@@ -510,13 +511,13 @@ export class OcadoProvider implements GroceryProvider {
     const basketItems: BasketItem[] = items.map((i: any) => {
       const p = info.get(i.productId) ?? {};
       const qty = i.quantity ?? 0;
-      const lineTotal = num(i?.finalPrice?.amount) ?? 0;
+      const lineTotal = toPrice(i?.finalPrice?.amount);
       return {
         item_id: i.productId,
         product_uid: i.productId,
         name: p.name ?? i.productId,
         quantity: qty,
-        unit_price: qty ? lineTotal / qty : lineTotal,
+        unit_price: perUnit(lineTotal, qty),
         total_price: lineTotal,
       };
     });
@@ -524,7 +525,7 @@ export class OcadoProvider implements GroceryProvider {
     const totalCost =
       num(cart?.totals?.subTotal?.amount) ??
       num(cart?.activeCheckoutGroupTotals?.itemPriceAfterPromos?.amount) ??
-      basketItems.reduce((s, b) => s + b.total_price, 0);
+      sumKnown(basketItems.map((b) => b.total_price));
 
     return {
       items: basketItems,

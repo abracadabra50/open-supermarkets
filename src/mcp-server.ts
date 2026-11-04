@@ -16,7 +16,7 @@ import {
 import { ProviderFactory, ProviderName, compareProduct } from './providers/index.js';
 import { createProvider, getManifest, supports } from './providers/registry.js';
 import type { FullGroceryProvider, Capability } from './providers/types.js';
-import { money } from './format.js';
+import { money, stockLabel, cheapest } from './format.js';
 import { explain } from './errors.js';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -470,12 +470,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         if (error) return `${provider.toUpperCase()}: Error - ${error}`;
         if (products.length === 0) return `${provider.toUpperCase()}: No products found`;
 
-        const cheapest = products.reduce((min, p) =>
-          p.retail_price.price < min.retail_price.price ? p : min
-        );
+        const lowest = cheapest(products);
         const lines = products.map((p, i) => {
-          const best = p.product_uid === cheapest.product_uid ? ' [BEST PRICE]' : '';
-          return `  ${i + 1}. ${p.name} - ${money(p.retail_price.price, p.currency)}${best} (ID: ${p.product_uid})`;
+          const best = lowest && p.product_uid === lowest.product_uid ? ' [BEST PRICE]' : '';
+          return `  ${i + 1}. ${p.name} - ${money(p.retail_price.price, p.currency)} | ${stockLabel(p.in_stock)}${best} (ID: ${p.product_uid})`;
         });
         return `${provider.toUpperCase()}:\n${lines.join('\n')}`;
       });
@@ -497,7 +495,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const limited = results.slice(0, limit);
 
       const formatted = limited.map((p, i) => {
-        const stock = p.in_stock === true ? 'In stock' : p.in_stock === false ? 'Out of stock' : 'Stock unknown';
+        const stock = stockLabel(p.in_stock);
         const unitPrice = p.unit_price ? ` (${p.unit_price.price}/${p.unit_price.measure})` : '';
         return `${i + 1}. ${p.name}\n   ${money(p.retail_price.price, p.currency)}${unitPrice} | ${stock} | ID: ${p.product_uid}`;
       }).join('\n\n');
@@ -523,7 +521,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       const formatted = products.map((p: any, i: number) => {
-        const stock = p.in_stock === true ? 'In stock' : p.in_stock === false ? 'Out of stock' : 'Stock unknown';
+        const stock = stockLabel(p.in_stock);
         const unitPrice = p.unit_price ? ` (${p.unit_price.price}/${p.unit_price.measure})` : '';
         return `${i + 1}. ${p.name}\n   ${money(p.retail_price.price, p.currency)}${unitPrice} | ${stock} | ID: ${p.product_uid}`;
       }).join('\n\n');
@@ -549,7 +547,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       const formatted = products.map((p: any, i: number) => {
-        const stock = p.in_stock === true ? 'In stock' : p.in_stock === false ? 'Out of stock' : 'Stock unknown';
+        const stock = stockLabel(p.in_stock);
         const unitPrice = p.unit_price ? ` (${p.unit_price.price}/${p.unit_price.measure})` : '';
         return `${i + 1}. ${p.name}\n   ${money(p.retail_price.price, p.currency)}${unitPrice} | ${stock} | ID: ${p.product_uid}`;
       }).join('\n\n');
@@ -590,7 +588,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       const formatted = products.map((p: any, i: number) => {
-        const stock = p.in_stock === true ? 'In stock' : p.in_stock === false ? 'Out of stock' : 'Stock unknown';
+        const stock = stockLabel(p.in_stock);
         const unitPrice = p.unit_price ? ` (${p.unit_price.price}/${p.unit_price.measure})` : '';
         return `${i + 1}. ${p.name}\n   ${money(p.retail_price.price, p.currency)}${unitPrice} | ${stock} | ID: ${p.product_uid}`;
       }).join('\n\n');

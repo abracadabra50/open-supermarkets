@@ -15,6 +15,7 @@
 
 import axios, { AxiosInstance } from 'axios';
 import type { Product, SearchOptions } from './types';
+import { toPrice, toStock } from './normalise';
 
 const API_BASE = 'https://api.ah.nl';
 const CLIENT_ID = 'appie-ios';
@@ -113,12 +114,12 @@ export class AlbertHeijnProvider {
   }
 
   private toProduct(p: AhProduct): Product {
-    const price = p.currentPrice ?? p.priceBeforeBonus ?? 0;
+    const price = toPrice(p.currentPrice ?? p.priceBeforeBonus);
     return {
       product_uid: String(p.webshopId),
       name: p.title,
       retail_price: { price },
-      in_stock: p.orderable !== false,
+      in_stock: toStock(p.orderable),
       image_url: p.images?.[p.images.length - 1]?.url,
       provider: this.name,
       currency: 'EUR',

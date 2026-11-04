@@ -238,7 +238,7 @@ async function main() {
   await check('normaliseProduct: stock follows status, then isForSale; nothing is invented', () => {
     assert.strictEqual(normaliseProduct({ ...BANANA, status: 'Unavailable' }).in_stock, false);
     assert.strictEqual(normaliseProduct({ ...BANANA, status: undefined, isForSale: true }).in_stock, true);
-    assert.strictEqual(normaliseProduct({ ...BANANA, status: undefined, isForSale: undefined }).in_stock, false);
+    assert.strictEqual(normaliseProduct({ ...BANANA, status: undefined, isForSale: undefined }).in_stock, null);
     const bare = normaliseProduct({ id: '1', title: 'x', price: { actual: 10 } });
     assert.strictEqual(bare.unit_price, undefined);
     assert.strictEqual(bare.rating, undefined);

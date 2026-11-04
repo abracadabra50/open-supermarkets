@@ -1,4 +1,5 @@
 import { SainsburysAPI } from '../api/client';
+import { money } from '../format';
 
 export async function addCommand(api: SainsburysAPI, productId: string, quantity: number) {
   console.error(`🛒 Adding product ${productId} (qty: ${quantity})...`);
@@ -12,7 +13,7 @@ export async function addCommand(api: SainsburysAPI, productId: string, quantity
     if (basket.trolley?.trolley_details) {
       const trolley = basket.trolley.trolley_details;
       console.log(`\nBasket now has ${trolley.total_quantity || 0} items`);
-      console.log(`Total: £${trolley.total_cost || 0}`);
+      console.log(`Total: ${money(trolley.total_cost)}`);
     }
     
     return result;
@@ -35,7 +36,7 @@ export async function removeCommand(api: SainsburysAPI, itemId: string) {
     if (basket.trolley?.trolley_details) {
       const trolley = basket.trolley.trolley_details;
       console.log(`\nBasket now has ${trolley.total_quantity || 0} items`);
-      console.log(`Total: £${trolley.total_cost || 0}`);
+      console.log(`Total: ${money(trolley.total_cost)}`);
     }
   } catch (error: any) {
     console.error('❌ Failed to remove from basket');
@@ -56,7 +57,7 @@ export async function updateCommand(api: SainsburysAPI, itemId: string, quantity
     if (basket.trolley?.trolley_details) {
       const trolley = basket.trolley.trolley_details;
       console.log(`\nBasket now has ${trolley.total_quantity || 0} items`);
-      console.log(`Total: £${trolley.total_cost || 0}`);
+      console.log(`Total: ${money(trolley.total_cost)}`);
     }
   } catch (error: any) {
     console.error('❌ Failed to update basket');

@@ -20,6 +20,7 @@
  */
 
 import axios, { AxiosInstance } from 'axios';
+import { toPrice } from './normalise';
 import type { Product, SearchOptions } from './types';
 
 const REST_BASE = 'https://tienda.mercadona.es';
@@ -86,12 +87,6 @@ export class MercadonaProvider {
     });
   }
 
-  /** Prices arrive as strings ("5.04") as often as numbers. */
-  private static num(v: unknown): number {
-    const n = typeof v === 'number' ? v : parseFloat(String(v ?? ''));
-    return Number.isFinite(n) ? n : 0;
-  }
-
   private static label(p: MercadonaHit): string {
     const display = (p.display_name ?? '').trim();
     const brand = (p.brand ?? '').trim();
@@ -117,7 +112,8 @@ export class MercadonaProvider {
       // Hacendado"), so prefixing it unconditionally gives "Hacendado Leche
       // semidesnatada Hacendado". Only prepend when it is genuinely absent.
       name: MercadonaProvider.label(p),
-      retail_price: { price: MercadonaProvider.num(pi.unit_price ?? pi.bulk_price) },
+      // Prices arrive as strings ("5.04") as often as numbers.
+      retail_price: { price: toPrice(pi.unit_price ?? pi.bulk_price) },
       in_stock: true, // The catalogue only lists published, purchasable products.
       image_url: p.thumbnail,
       provider: this.name,

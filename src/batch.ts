@@ -38,10 +38,12 @@ export interface BatchSearchResult {
 export interface LeanProduct {
   id: string;
   name: string;
-  price: number;
+  /** null = the retailer gave no price. */
+  price: number | null;
   currency: string;
   size?: string;
   unit?: string;
+  /** null = the retailer did not say whether it is available. */
   inStock: boolean | null;
 }
 

@@ -10,7 +10,7 @@ import {
   createProvider,
 } from './providers/registry';
 import type { Capability } from './providers/types';
-import { money } from './format';
+import { money, byPrice, cheapest, dealCandidates, stockLabel } from './format';
 import { explain } from './errors';
 // Tesco is imported as a *type only* — a value import here would pull Playwright
 // into every `groc` invocation, including `groc providers` in another country.
@@ -59,7 +59,7 @@ function getProvider(options: any) {
 
 function printProducts(products: any[]) {
   products.forEach((p, i) => {
-    const stock = p.in_stock === true ? '✅' : p.in_stock === false ? '❌' : 'stock unknown';
+    const stock = p.in_stock === true ? '✅' : p.in_stock === false ? '❌' : '❔ stock unknown';
     const rating = p.rating ? ` ${p.rating}★ (${p.review_count ?? 0})` : '';
     const size = p.size ? ` / ${p.size}` : '';
     const unit = p.unit_price?.price
@@ -339,14 +339,14 @@ program
       const provider = getProvider(cmd.optsWithGlobals());
       const limit = parsePositiveInt(options.limit, 'limit');
       const products = await provider.search(query, { limit: 50 });
-      const available = products.filter(p => p.in_stock && p.retail_price.price > 0);
+      // Known out-of-stock and unknown-price items can't be a deal. Unknown
+      // stock stays in, labelled as such, rather than being guessed either way.
+      const available = dealCandidates(products);
       const rated = available
         .filter(p => p.rating)
         .sort((a, b) => (b.rating! - a.rating!) || ((b.review_count ?? 0) - (a.review_count ?? 0)))
         .slice(0, limit);
-      const cheapest = [...available]
-        .sort((a, b) => a.retail_price.price - b.retail_price.price)
-        .slice(0, limit);
+      const cheapest = [...available].sort(byPrice).slice(0, limit);
       if (options.json) {
         console.log(JSON.stringify({ top_rated: rated, cheapest }, null, 2));
       } else {
@@ -448,14 +448,12 @@ program
           continue;
         }
 
-        const cheapest = products.reduce((min, p) => 
-          p.retail_price.price < min.retail_price.price ? p : min
-        );
+        const best = cheapest(products);
 
         products.slice(0, 5).forEach((p, i) => {
-          const isCheapest = p.product_uid === cheapest.product_uid ? ' 💰 BEST' : '';
+          const isCheapest = best && p.product_uid === best.product_uid ? ' 💰 BEST' : '';
           console.log(`${i + 1}. ${p.name}`);
-          console.log(`   ${money(p.retail_price.price, p.currency)}${isCheapest}`);
+          console.log(`   ${money(p.retail_price.price, p.currency)} | ${stockLabel(p.in_stock)}${isCheapest}`);
         });
         console.log();
       }
