@@ -22,7 +22,7 @@
     "setup": "./setup.sh",
     "supermarket": "tsx src/cli.ts",
     "prepublishOnly": "npm run build",
-    "test": "tsx test/lazy-loading.test.ts && tsx test/sainsburys-favourites.test.ts && tsx test/tesco-hu.test.ts && tsx test/ahorramas.test.ts && tsx test/gtin.test.ts && tsx test/ocado-shelf-life.test.ts && tsx test/lidl-ie.test.js && tsx test/mcp-stock.test.ts && tsx test/ie-shared.test.ts && tsx test/mcp-capability.test.ts && tsx test/http-capability.test.ts && tsx test/tesco-amend.test.ts && tsx test/migros.test.ts",
+    "test": "node scripts/run-tests.js",
     "test:ahorramas:live": "tsx scripts/ahorramas-live.ts",
     "typecheck": "tsc --noEmit"
   },
