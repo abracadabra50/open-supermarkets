@@ -1,12 +1,38 @@
 import axios, { AxiosInstance } from 'axios';
 import { GroceryProvider, Product, Basket, DeliverySlot, Order, SearchOptions, BasketItem } from './types';
 import { login } from '../auth/login';
+import { firstValidGtin } from './gtin';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 
 const API_BASE = 'https://www.sainsburys.co.uk/groceries-api/gol-services';
 const SESSION_FILE = path.join(os.homedir(), '.sainsburys', 'session.json');
+
+/**
+ * Map one gol-services product onto the shared `Product` shape.
+ *
+ * Exported as a standalone function — the same shape `tesco-hu` uses — so the
+ * mapping can be regression-tested against a captured response without
+ * constructing a provider.
+ */
+export function normaliseProduct(p: any, provider: string = 'sainsburys'): Product {
+  return {
+    product_uid: p.product_uid,
+    name: p.name,
+    description: p.description || p.short_description,
+    retail_price: p.retail_price,
+    unit_price: p.unit_price,
+    in_stock: p.in_stock !== false && p.is_available !== false,
+    image_url: p.image || p.assets?.plp_image,
+    provider,
+    // `eans` is an array because a product can carry more than one barcode —
+    // a multipack and its inner unit — and the first entry is not guaranteed
+    // usable: it can be empty, an internal code, or fail its check digit. Take
+    // the first that actually validates rather than assuming [0].
+    gtin: firstValidGtin(p.eans),
+  };
+}
 
 export class SainsburysProvider implements GroceryProvider {
   readonly name = 'sainsburys';
@@ -116,16 +142,7 @@ export class SainsburysProvider implements GroceryProvider {
   }
 
   private mapProduct(p: any): Product {
-    return {
-      product_uid: p.product_uid,
-      name: p.name,
-      description: p.description || p.short_description,
-      retail_price: p.retail_price,
-      unit_price: p.unit_price,
-      in_stock: p.in_stock !== false && p.is_available !== false,
-      image_url: p.image || p.assets?.plp_image,
-      provider: this.name
-    };
+    return normaliseProduct(p, this.name);
   }
 
   async search(query: string, options?: SearchOptions): Promise<Product[]> {

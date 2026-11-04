@@ -25,6 +25,31 @@ export interface Product {
   rating?: number;       // 0-5 overall rating, when the provider exposes it
   review_count?: number; // number of ratings behind `rating`
   size?: string;         // pack size, e.g. "750g", "6 pack"
+  /**
+   * GTIN-14, when the provider exposes a real barcode.
+   *
+   * This is the only field that means the same thing at two different
+   * retailers, so it is what turns "compare these baskets" from fuzzy name
+   * matching into an exact join — the same argument `kroger.ts` already makes
+   * for Open Food Facts enrichment. Own-label lines have no shared barcode by
+   * definition and simply leave it undefined.
+   *
+   * Always normalised through `gtin.ts` to GTIN-14 and check-digit validated,
+   * because providers disagree about zero-padding: Tesco returns
+   * `05000157024886`, Sainsbury's `5000157024886`.
+   */
+  gtin?: string;
+  /**
+   * Guaranteed remaining life in DAYS from delivery, when the provider states
+   * it. Ocado's `LIFE 3d+` badge is this number.
+   *
+   * Worth a field of its own because it is per-PACK and stated by the retailer:
+   * a generic "milk keeps a week" table cannot tell Cravendale's two weeks from
+   * a fresh organic line's six days, and any caller sequencing a meal plan or
+   * flagging waste needs the difference. Absent means the provider said
+   * nothing — never assume a default.
+   */
+  shelf_life_days?: number;
 }
 
 export interface BasketItem {

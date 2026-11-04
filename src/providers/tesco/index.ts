@@ -7,7 +7,51 @@
 
 import { GroceryProvider, Product, Basket, DeliverySlot, Order, SearchOptions, BasketItem } from '../types';
 import { TescoAPI } from './api';
+import { cleanGtin } from '../gtin';
 import { login, loadSession, clearSession, getCookieString } from './auth';
+
+/**
+ * Map one xapi product onto the shared `Product` shape.
+ *
+ * Exported as a standalone function — the same shape `tesco-hu` uses — so the
+ * mapping can be regression-tested against a captured response without
+ * constructing a provider.
+ */
+export function normaliseProduct(p: any, provider: string = 'tesco'): Product {
+    // Price: try displayPrice, unitPrice, then fall back to promotion afterDiscount
+    const promoPrice = p?.promotions?.[0]?.price?.afterDiscount;
+    const promoUnit = p?.promotions?.[0]?.unitSellingInfo; // e.g. "£0.20/each"
+    const price = parseFloat(
+      p?.displayPrice?.value || p?.unitPrice?.price || p?.price?.actual || promoPrice || 0
+    );
+
+    // Unit price from unitSellingInfo string e.g. "£1.20/100g"
+    let unitPrice: { price: number; measure: string } | undefined;
+    if (p?.unitPrice?.price && p?.unitPrice?.measure) {
+      unitPrice = { price: parseFloat(p.unitPrice.price), measure: p.unitPrice.measure };
+    } else if (promoUnit) {
+      const m = promoUnit.match(/£([\d.]+)\s*\/\s*(.+)/);
+      if (m) unitPrice = { price: parseFloat(m[1]), measure: m[2].trim() };
+    }
+
+    return {
+      product_uid: String(p?.id || p?.gtin || ''),
+      // The GraphQL query has always selected `gtin`; it was only ever used as
+      // a fallback for product_uid, which never fires because `id` is present.
+      // product_uid must stay the internal id — basket operations address
+      // products by it — so the barcode gets its own field.
+      gtin: cleanGtin(p?.gtin),
+      name: p?.title || p?.name || 'Unknown product',
+      description: Array.isArray(p?.description?.features)
+        ? p.description.features.join('; ')
+        : (p?.description?.info || undefined),
+      retail_price: { price },
+      unit_price: unitPrice,
+      in_stock: p?.isAvailable !== false && p?.maxQuantityAllowed !== 0 && p?.maxQuantity !== 0,
+      image_url: p?.defaultImageUrl || undefined,
+      provider,
+    };
+  }
 
 export class TescoProvider implements GroceryProvider {
   readonly name = 'tesco';
@@ -242,34 +286,7 @@ export class TescoProvider implements GroceryProvider {
   }
 
   private normaliseProduct(p: any): Product {
-    // Price: try displayPrice, unitPrice, then fall back to promotion afterDiscount
-    const promoPrice = p?.promotions?.[0]?.price?.afterDiscount;
-    const promoUnit = p?.promotions?.[0]?.unitSellingInfo; // e.g. "£0.20/each"
-    const price = parseFloat(
-      p?.displayPrice?.value || p?.unitPrice?.price || p?.price?.actual || promoPrice || 0
-    );
-
-    // Unit price from unitSellingInfo string e.g. "£1.20/100g"
-    let unitPrice: { price: number; measure: string } | undefined;
-    if (p?.unitPrice?.price && p?.unitPrice?.measure) {
-      unitPrice = { price: parseFloat(p.unitPrice.price), measure: p.unitPrice.measure };
-    } else if (promoUnit) {
-      const m = promoUnit.match(/£([\d.]+)\s*\/\s*(.+)/);
-      if (m) unitPrice = { price: parseFloat(m[1]), measure: m[2].trim() };
-    }
-
-    return {
-      product_uid: String(p?.id || p?.gtin || ''),
-      name: p?.title || p?.name || 'Unknown product',
-      description: Array.isArray(p?.description?.features)
-        ? p.description.features.join('; ')
-        : (p?.description?.info || undefined),
-      retail_price: { price },
-      unit_price: unitPrice,
-      in_stock: p?.isAvailable !== false && p?.maxQuantityAllowed !== 0 && p?.maxQuantity !== 0,
-      image_url: p?.defaultImageUrl || undefined,
-      provider: this.name,
-    };
+    return normaliseProduct(p, this.name);
   }
 
   private normaliseBasketItem(item: any): BasketItem {
