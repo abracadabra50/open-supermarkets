@@ -14,7 +14,8 @@ import {
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 import { ProviderFactory, ProviderName, compareProduct } from './providers/index.js';
-import type { FullGroceryProvider } from './providers/types.js';
+import { createProvider, getManifest, supports } from './providers/registry.js';
+import type { FullGroceryProvider, Capability } from './providers/types.js';
 import { money } from './format.js';
 import { explain } from './errors.js';
 import * as fs from 'fs';
@@ -43,7 +44,7 @@ const SESSION_PATHS: Record<ProviderName, string> = {
 };
 
 /** Providers whose catalogue search works with no session at all. */
-const ANONYMOUS_SEARCH = new Set<ProviderName>(['tesco-hu']);
+const ANONYMOUS_SEARCH = new Set<ProviderName>(['tesco-hu', 'lidl-ie']);
 
 function isLoggedIn(provider: ProviderName): boolean {
   return fs.existsSync(SESSION_PATHS[provider]);
@@ -67,9 +68,18 @@ function textResult(text: string, isError = false) {
   };
 }
 
+function searchLimit(value: unknown, fallback: number): number {
+  if (value === undefined) return fallback;
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < 1) {
+    throw new RangeError('limit must be a positive integer');
+  }
+  return Math.min(value, 100);
+}
+
 // ─── Tool definitions ────────────────────────────────────────────
 
 const providerEnum = { type: 'string', enum: PROVIDERS, description: 'Supermarket provider: sainsburys, ocado, tesco, or tesco-hu (Hungary)' };
+const searchProviderEnum = { type: 'string', enum: [...PROVIDERS, 'lidl-ie'], description: 'Search provider, including Lidl Ireland (search only)' };
 
 server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
@@ -97,13 +107,13 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       // ── Search ──
       {
         name: 'grocery_search',
-        description: 'Search for grocery products at a UK supermarket. Returns product names, prices, stock status, and IDs.',
+        description: 'Search a supermarket catalogue. Returns product names, prices, stock status, and IDs.',
         inputSchema: {
           type: 'object',
           properties: {
-            provider: { ...providerEnum, default: 'sainsburys' },
+            provider: { ...searchProviderEnum, default: 'sainsburys' },
             query: { type: 'string', description: 'Search term (e.g., "milk", "organic eggs", "chicken breast")' },
-            limit: { type: 'number', description: 'Maximum results to return (default: 10)', default: 10 },
+            limit: { type: 'integer', minimum: 1, maximum: 100, description: 'Maximum results to return (default: 10, maximum: 100)', default: 10 },
           },
           required: ['query'],
         },
@@ -130,13 +140,13 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         inputSchema: {
           type: 'object',
           properties: {
-            provider: { ...providerEnum, default: 'sainsburys' },
+            provider: { ...searchProviderEnum, default: 'sainsburys' },
             queries: {
               type: 'array',
               items: { type: 'string' },
               description: 'Product queries, e.g. ["semi skimmed milk","free range eggs"]',
             },
-            limit: { type: 'number', description: 'Candidates per query (default: 5)', default: 5 },
+            limit: { type: 'integer', minimum: 1, maximum: 100, description: 'Candidates per query (default: 5, maximum: 100)', default: 5 },
           },
           required: ['queries'],
         },
@@ -362,6 +372,32 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const providerName = ((args as any).provider || 'sainsburys') as ProviderName;
 
   try {
+    // Search-only providers cannot use the legacy authenticated operations.
+    // Reject before constructing a provider or making a retailer request.
+    const catalogueTool = name === 'grocery_search' || name === 'grocery_search_batch';
+    const providerSpecificTool = name === 'ocado_regulars' || name === 'tesco_staples';
+    const globalTool = name === 'grocery_status' || name === 'grocery_providers' || name === 'grocery_compare';
+    const toolCapabilities: Record<string, Capability> = {
+      grocery_basket_view: 'basket', grocery_basket_add: 'basket',
+      grocery_basket_remove: 'basket', grocery_basket_update: 'basket',
+      grocery_basket_clear: 'basket', grocery_basket_add_batch: 'basket',
+      grocery_slots: 'slots', grocery_book_slot: 'slots',
+      grocery_checkout: 'checkout', grocery_orders: 'orders',
+    };
+    const requiredCapability = toolCapabilities[name];
+    if (requiredCapability && !supports(providerName, requiredCapability)) {
+      return textResult(`Provider "${providerName}" does not support ${name}. Missing capability: ${requiredCapability}.`, true);
+    }
+    if (!catalogueTool && !globalTool && !providerSpecificTool &&
+        getManifest(providerName).capabilities.every(capability => capability === 'search')) {
+      return textResult(`Provider "${providerName}" does not support ${name}. Catalogue search only.`, true);
+    }
+    if (!globalTool && !providerSpecificTool && name !== 'grocery_login' &&
+        (!catalogueTool || !ANONYMOUS_SEARCH.has(providerName))) {
+      const loginError = requireLogin(providerName);
+      if (loginError) return textResult(loginError, true);
+    }
+
     // ── grocery_login ──
     if (name === 'grocery_login') {
       const { email, password } = args as { email: string; password: string };
@@ -382,15 +418,17 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const loggedIn = isLoggedIn(p);
         return `- ${p}: ${loggedIn ? 'logged in' : 'not logged in'}`;
       });
+      info.push('- lidl-ie: no login required (search only)');
       return textResult(`Available providers:\n${info.join('\n')}`);
     }
 
     // ── grocery_compare ──
     if (name === 'grocery_search_batch') {
-      const { queries = [], limit = 5 } = args as { queries?: string[]; limit?: number };
+      const { queries = [] } = args as { queries?: string[] };
+      const limit = searchLimit(args.limit, 5);
       if (!queries.length) return textResult('Give me at least one query.', true);
       const { batchSearch } = await import('./batch.js');
-      const provider = getProvider(providerName);
+      const provider = await createProvider(providerName);
       const results = await batchSearch(provider, queries, { limit });
       return textResult(JSON.stringify({ provider: providerName, results }, null, 2));
     }
@@ -430,19 +468,20 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     }
 
     // All remaining tools require login
-    const loginError = requireLogin(providerName);
+    const loginError = providerSpecificTool || (catalogueTool && ANONYMOUS_SEARCH.has(providerName)) ? null : requireLogin(providerName);
 
     // ── grocery_search ──
     if (name === 'grocery_search') {
       // Search can sometimes work without login for some providers, but check anyway
       if (loginError && !ANONYMOUS_SEARCH.has(providerName)) return textResult(loginError, true);
-      const { query, limit = 10 } = args as { query: string; limit?: number };
-      const provider = getProvider(providerName);
-      const results = await provider.search(query);
+      const { query } = args as { query: string };
+      const limit = searchLimit(args.limit, 10);
+      const provider = await createProvider(providerName);
+      const results = await provider.search(query, { limit });
       const limited = results.slice(0, limit);
 
       const formatted = limited.map((p, i) => {
-        const stock = p.in_stock ? 'In stock' : 'Out of stock';
+        const stock = p.in_stock === true ? 'In stock' : p.in_stock === false ? 'Out of stock' : 'Stock unknown';
         const unitPrice = p.unit_price ? ` (${p.unit_price.price}/${p.unit_price.measure})` : '';
         return `${i + 1}. ${p.name}\n   ${money(p.retail_price.price, p.currency)}${unitPrice} | ${stock} | ID: ${p.product_uid}`;
       }).join('\n\n');
@@ -468,7 +507,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       const formatted = products.map((p: any, i: number) => {
-        const stock = p.in_stock ? 'In stock' : 'Out of stock';
+        const stock = p.in_stock === true ? 'In stock' : p.in_stock === false ? 'Out of stock' : 'Stock unknown';
         const unitPrice = p.unit_price ? ` (${p.unit_price.price}/${p.unit_price.measure})` : '';
         return `${i + 1}. ${p.name}\n   ${money(p.retail_price.price, p.currency)}${unitPrice} | ${stock} | ID: ${p.product_uid}`;
       }).join('\n\n');
@@ -494,7 +533,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       const formatted = products.map((p: any, i: number) => {
-        const stock = p.in_stock ? 'In stock' : 'Out of stock';
+        const stock = p.in_stock === true ? 'In stock' : p.in_stock === false ? 'Out of stock' : 'Stock unknown';
         const unitPrice = p.unit_price ? ` (${p.unit_price.price}/${p.unit_price.measure})` : '';
         return `${i + 1}. ${p.name}\n   ${money(p.retail_price.price, p.currency)}${unitPrice} | ${stock} | ID: ${p.product_uid}`;
       }).join('\n\n');
@@ -535,7 +574,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       const formatted = products.map((p: any, i: number) => {
-        const stock = p.in_stock ? 'In stock' : 'Out of stock';
+        const stock = p.in_stock === true ? 'In stock' : p.in_stock === false ? 'Out of stock' : 'Stock unknown';
         const unitPrice = p.unit_price ? ` (${p.unit_price.price}/${p.unit_price.measure})` : '';
         return `${i + 1}. ${p.name}\n   ${money(p.retail_price.price, p.currency)}${unitPrice} | ${stock} | ID: ${p.product_uid}`;
       }).join('\n\n');
@@ -547,6 +586,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
     // ── ocado_regulars ──
     if (name === 'ocado_regulars') {
+      const ocadoLoginError = requireLogin('ocado');
+      if (ocadoLoginError) return textResult(ocadoLoginError, true);
       const provider: any = getProvider('ocado');
 
       if (typeof provider.getRegulars !== 'function') {
@@ -731,8 +772,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error('UK Grocery MCP Server v2.1.0 running on stdio');
-  console.error(`Providers: ${PROVIDERS.join(', ')}`);
+  console.error('Open Supermarkets MCP Server v2.1.0 running on stdio');
+  console.error(`Providers: ${[...PROVIDERS, 'lidl-ie (search only)'].join(', ')}`);
 }
 
 main().catch((error) => {

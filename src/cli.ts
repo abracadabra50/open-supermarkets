@@ -56,7 +56,7 @@ function getProvider(options: any) {
 
 function printProducts(products: any[]) {
   products.forEach((p, i) => {
-    const stock = p.in_stock ? '✅' : '❌';
+    const stock = p.in_stock === true ? '✅' : p.in_stock === false ? '❌' : 'stock unknown';
     const rating = p.rating ? ` ${p.rating}★ (${p.review_count ?? 0})` : '';
     const size = p.size ? ` / ${p.size}` : '';
     const unit = p.unit_price?.price
@@ -182,7 +182,7 @@ program
         const [first] = providersFor(country, 'search');
         provider = await createProvider(first.id);
       } else {
-        provider = getProvider(globals);
+        provider = await createProvider(globals.provider);
       }
 
       // Batch mode: thirty queries in one invocation instead of thirty.

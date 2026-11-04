@@ -2,7 +2,7 @@
 
 Open Supermarkets gives agents one grocery interface across multiple retailers and countries instead of requiring retailer-specific integrations in every agent.
 
-Current `main` covers 11 provider integrations across the UK, Netherlands, Belgium, Spain, Hungary, the US and Canada.
+Current `main` covers 12 provider integrations across the UK, Ireland, the Netherlands, Belgium, Spain, Hungary, the US and Canada.
 
 ## What agents should use it for
 
@@ -116,8 +116,8 @@ if (product.in_stock === false) {
   // explicitly unavailable
 } else if (product.in_stock === true) {
   // explicitly available
-} else {
-  // availability unknown
+} else if (product.in_stock === null) {
+  // retailer gave no reliable stock signal
 }
 ```
 

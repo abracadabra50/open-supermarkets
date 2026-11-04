@@ -8,9 +8,10 @@ For contributor-facing provider requirements, see [PROVIDER-SPEC.md](./PROVIDER-
 
 ## Current coverage
 
-Current `main` includes 11 provider integrations across 7 countries:
+Current `main` includes 12 provider integrations across 8 countries:
 
 - United Kingdom: Sainsbury's, Tesco, Ocado
+- Ireland: Lidl Ireland
 - Netherlands: Albert Heijn
 - Belgium: Albert Heijn België
 - Spain: Mercadona, AhorraMás
@@ -92,7 +93,7 @@ interface Product {
     price: number;
   };
 
-  in_stock: boolean;
+  in_stock: boolean | null; // true: available; false: explicitly unavailable; null: no reliable signal
   image_url?: string;
   provider: string;
   currency?: string;
@@ -104,7 +105,17 @@ interface Product {
 
 `currency` is ISO 4217. Older UK providers may omit it, in which case consumers historically treated the value as GBP. New non-UK providers must set it explicitly.
 
-The project is moving toward representing unknown availability explicitly rather than conflating it with out-of-stock. See the provider specification and open architecture issues before introducing new fallback semantics.
+Availability is a three-state contract:
+
+| `in_stock` / batch `inStock` | Meaning |
+|---|---|
+| `true` | In stock |
+| `false` | Explicitly out of stock |
+| `null` | Retailer did not provide a reliable stock signal |
+
+Use strict equality when branching on stock. `!product.in_stock` conflates unavailable and unknown; `product.in_stock === false` identifies only explicit out-of-stock signals.
+
+Providers that cannot yet distinguish unknown availability still report a boolean; see the provider specification before introducing new fallback semantics.
 
 ## Search
 

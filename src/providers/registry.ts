@@ -55,6 +55,19 @@ export const PROVIDERS: ProviderManifest[] = [
     load: async () => (await import('./tesco/index')).TescoProvider,
   },
 
+  // ── Ireland ──────────────────────────────────────────────────────────
+  {
+    id: 'lidl-ie',
+    label: 'Lidl Ireland',
+    country: 'IE',
+    capabilities: ['search'],
+    auth: 'none',
+    tier: 'community',
+    maintainer: 'c-mongan',
+    credit: 'Protocol reimplemented from AviBackToBlack/lidaldi (MIT)',
+    load: async () => (await import('./lidl-ie')).LidlIrelandProvider,
+  },
+
   // ── Netherlands ──────────────────────────────────────────────────────
   {
     id: 'ah',

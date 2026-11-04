@@ -1,6 +1,6 @@
 ---
 name: open-supermarkets
-description: "Open-source supermarket infrastructure across 11 provider integrations in 7 countries. Search live catalogues and prices, compare retailers, build baskets, inspect slots and orders, and preview checkout through CLI, HTTP, MCP or agent skills."
+description: "Open-source supermarket infrastructure across 12 provider integrations in 8 countries. Search live catalogues and prices, compare retailers, build baskets, inspect slots and orders, and preview checkout through CLI, HTTP, MCP or agent skills."
 license: MIT
 compatibility: Node.js 18+, TypeScript. Playwright only for browser-auth providers. Delivery areas and capabilities vary by retailer.
 metadata:
@@ -19,13 +19,14 @@ Use it when an agent needs live grocery search, retailer comparison, basket oper
 
 ## Current coverage
 
-Current `main` includes 11 provider integrations across 7 countries:
+Current `main` includes 12 provider integrations across 8 countries:
 
 | Provider | Market | Main capabilities |
 |---|---|---|
 | Sainsbury's | UK | search, basket, slots, checkout, orders |
 | Tesco | UK | search, basket, slots, checkout, orders |
 | Ocado | UK | search, basket, read slots, orders |
+| Lidl Ireland | Ireland | search |
 | Albert Heijn | Netherlands | search |
 | Albert Heijn België | Belgium | search |
 | Mercadona | Spain | search |
@@ -120,6 +121,14 @@ Do not blindly select the first or cheapest absolute-price result.
 Treat availability as a truth claim.
 
 If a provider can distinguish unknown availability, do not convert unknown into out-of-stock or in-stock.
+
+| `in_stock` / batch `inStock` | Meaning |
+|---|---|
+| `true` | In stock |
+| `false` | Explicitly out of stock |
+| `null` | Retailer did not provide a reliable stock signal |
+
+Use strict equality (`=== true`, `=== false`, `=== null`) when branching on stock. `!product.in_stock` conflates unavailable and unknown; `product.in_stock === false` identifies only explicit out-of-stock signals. When stock is `null`, report it as unknown and ask the user to check with the retailer.
 
 ## Authentication
 
