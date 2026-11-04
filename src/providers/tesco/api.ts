@@ -19,6 +19,30 @@ import axios, { AxiosInstance } from 'axios';
 
 const XAPI_URL = 'https://xapi.tesco.com/';
 
+/**
+ * Product fields that exist on xapi's ProductInterface, checked against live
+ * anonymous responses on 2026-11-04. `unitPrice`, `displayPrice` and
+ * `isAvailable` are NOT fields there; selecting any of them fails the whole
+ * query, which is why `product <id>` used to error.
+ *
+ * `status` / `isForSale` are scoped to the shopper's store: the session's store
+ * when logged in, a default (GB) store otherwise. That is what makes a GB-only
+ * product read as unavailable for a Northern Ireland account (issue #15).
+ */
+export const PRODUCT_FIELDS = `
+  id
+  tpnb
+  tpnc
+  gtin
+  title
+  description
+  status
+  isForSale
+  defaultImageUrl
+  price { actual unitPrice unitOfMeasure }
+  promotions { description price { afterDiscount } unitSellingInfo }
+`;
+
 // Static API key baked into Tesco's mfe-* bundles (confirmed from discovery)
 const TESCO_API_KEY = 'TvOSZJHlEk0pjniDGQFAc9Q59WGAR4dA';
 
@@ -125,116 +149,32 @@ export class TescoAPI {
   // ─────────────────────────────────────────────────────────
 
   /**
-   * Search for products.
+   * Search for products with xapi's `search`, the query tesco.com itself uses.
    *
-   * Step 1: search.api.tesco.com returns a list of TPNBs (no Akamai block).
-   * Step 2: xapi GraphQL batch-fetches full product details for each TPNB.
-   *
-   * The www.tesco.com/search page is SSR (blocked by Akamai for non-browser
-   * requests), and the xapi GetRecommendations approach only returns exclusion
-   * context (no results). This two-step approach avoids both problems.
+   * This replaced a two-step search (national TPNBs from search.api.tesco.com,
+   * then a detail fetch per TPNB). The national list ignores the shopper's
+   * store, so a Northern Ireland account was handed GB product codes that its
+   * store doesn't sell (#15). xapi search is scoped the same way the storefront
+   * is (session store, else a default) and returns status in one round trip.
    */
   async searchProducts(query: string, count: number = 24, page: number = 1) {
-    const offset = (page - 1) * count;
-
-    // Step 1: get TPNBs from the public search API
-    const searchResp = await axios.get('https://search.api.tesco.com/search', {
-      params: { distchannel: 'ghs', query, count, offset },
-      headers: {
-        Accept: 'application/json',
-        'Accept-Language': 'en-GB',
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        Referer: 'https://www.tesco.com/',
-      },
-    });
-
-    const tpnbs: string[] = (searchResp.data?.uk?.ghs?.products?.results || [])
-      .map((r: any) => String(r.tpnb))
-      .filter(Boolean)
-      .slice(0, count);
-
-    if (!tpnbs.length) return [];
-
-    // Step 2: batch-fetch product details from xapi (one op per tpnb)
-    const PRODUCT_QUERY = `
-      query GetProductByTpnb($tpnb: String) {
-        product(tpnb: $tpnb) {
-          id
-          gtin
-          title
-          price { actual }
-          defaultImageUrl
+    const data = await this.gql('Search', `
+      query Search($query: String!, $page: Int, $count: Int, $sortBy: String) {
+        search(query: $query, page: $page, count: $count, sortBy: $sortBy) {
+          info { total page count pageSize offset }
+          results { node { ... on ProductType { ${PRODUCT_FIELDS} } } }
         }
       }
-    `;
-
-    const batchBody = tpnbs.map((tpnb) => ({
-      operationName: 'GetProductByTpnb',
-      variables: { tpnb },
-      query: PRODUCT_QUERY,
-    }));
-
-    const batchResp = await this.client.post(XAPI_URL, batchBody);
-    const results: any[] = Array.isArray(batchResp.data) ? batchResp.data : [batchResp.data];
-
-    const products = results.map((r: any) => r?.data?.product).filter(Boolean);
-
-    // Step 1 is unauthenticated and step 2 is not, so an expired session shows up
-    // here as "search found 10 items and returned 0" — indistinguishable from a
-    // genuine no-results query, which is how a dead session masqueraded as an
-    // empty catalogue. If the search API found TPNBs and the detail fetch
-    // resolved none of them, that is an auth failure, not an empty shelf.
-    if (products.length === 0) {
-      const gqlErrors = results
-        .flatMap((r: any) => r?.errors ?? [])
-        .map((e: any) => e?.message)
-        .filter(Boolean);
-
-      throw new Error(
-        `Tesco found ${tpnbs.length} products but could not load any of them` +
-          (gqlErrors.length ? `: ${gqlErrors.slice(0, 2).join('; ')}` : '') +
-          `.\nThis is almost always an expired session — check with ` +
-          `\`supermarket status --provider tesco\` and re-import cookies with ` +
-          `\`supermarket import-session --provider tesco --stdin\`.`
-      );
-    }
-
-    return products;
+    `, { query, page, count, sortBy: 'relevance' });
+    return (data?.search?.results ?? []).map((r: any) => r?.node).filter(Boolean).slice(0, count); // count is a hint to xapi
   }
 
   async getProduct(tpnc: string) {
     return this.gql('GetProduct', `
-      query GetProduct($tpnc: String, $skipReviews: Boolean, $offset: Int, $count: Int) {
-        product(tpnc: $tpnc) {
-          id
-          gtin
-          title
-          unitPrice {
-            price
-            measure
-          }
-          displayPrice {
-            value
-          }
-          isAvailable
-          maxQuantity
-          defaultImageUrl
-          description {
-            features
-            info
-          }
-          promotions {
-            description
-          }
-          reviews(skipReviews: $skipReviews, offset: $offset, count: $count) {
-            stats {
-              overallRating
-              total
-            }
-          }
-        }
+      query GetProduct($tpnc: String) {
+        product(tpnc: $tpnc) { ${PRODUCT_FIELDS} }
       }
-    `, { tpnc, skipReviews: false, offset: 0, count: 5 });
+    `, { tpnc });
   }
 
   // ─────────────────────────────────────────────────────────

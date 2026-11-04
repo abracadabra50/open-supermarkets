@@ -12,8 +12,17 @@ import { TescoAPI } from './api';
 import { cleanGtin } from '../gtin';
 import { login, loadSession, clearSession, getCookieString } from './auth';
 
-/** A no from any field wins; isAvailable: true counts; otherwise unknown. */
+/**
+ * Can this shopper buy it online, per Tesco?
+ *
+ * `status` is authoritative and store-scoped: "AvailableForSale" is a yes;
+ * anything else ("ProductNotFound" for a product the shopper's store doesn't
+ * range, e.g. GB lines for a Northern Ireland account) is a no. Without it,
+ * `isForSale`, then the older isAvailable/maxQuantity fields. Nothing → unknown.
+ */
 export function tescoStock(p: any): boolean | null {
+  if (typeof p?.status === 'string') return p.status === 'AvailableForSale';
+  if (typeof p?.isForSale === 'boolean') return p.isForSale;
   if (p?.isAvailable === false || p?.maxQuantityAllowed === 0 || p?.maxQuantity === 0) return false;
   if (p?.isAvailable === true) return true;
   return null;
@@ -27,16 +36,20 @@ export function tescoStock(p: any): boolean | null {
  * constructing a provider.
  */
 export function normaliseProduct(p: any, provider: string = 'tesco'): Product {
-    // Price: try displayPrice, unitPrice, then fall back to promotion afterDiscount
+    // Price: price.actual is the live xapi field. displayPrice is an older
+    // shape kept for captured fixtures; promotion afterDiscount is last. (The
+    // per-unit price is never a fallback for the item price.)
     const promoPrice = p?.promotions?.[0]?.price?.afterDiscount;
     const promoUnit = p?.promotions?.[0]?.unitSellingInfo; // e.g. "£0.20/each"
-    const price = toPrice(
-      p?.displayPrice?.value || p?.unitPrice?.price || p?.price?.actual || promoPrice
-    );
+    const price = toPrice(p?.price?.actual ?? p?.displayPrice?.value ?? promoPrice);
 
-    // Unit price from unitSellingInfo string e.g. "£1.20/100g"
+    // Unit price: price.unitPrice + unitOfMeasure on xapi today; older
+    // unitPrice { price measure }; else the promo's "£1.20/100g" string.
     let unitPrice: { price: number; measure: string } | undefined;
-    if (p?.unitPrice?.price && p?.unitPrice?.measure) {
+    const liveUnit = toPrice(p?.price?.unitPrice);
+    if (liveUnit !== null && p?.price?.unitOfMeasure) {
+      unitPrice = { price: liveUnit, measure: String(p.price.unitOfMeasure) };
+    } else if (p?.unitPrice?.price && p?.unitPrice?.measure) {
       unitPrice = { price: parseFloat(p.unitPrice.price), measure: p.unitPrice.measure };
     } else if (promoUnit) {
       const m = promoUnit.match(/£([\d.]+)\s*\/\s*(.+)/);
@@ -51,9 +64,11 @@ export function normaliseProduct(p: any, provider: string = 'tesco'): Product {
       // products by it — so the barcode gets its own field.
       gtin: cleanGtin(p?.gtin),
       name: p?.title || p?.name || 'Unknown product',
-      description: Array.isArray(p?.description?.features)
-        ? p.description.features.join('; ')
-        : (p?.description?.info || undefined),
+      description: Array.isArray(p?.description)
+        ? (p.description.join(' ') || undefined)
+        : Array.isArray(p?.description?.features)
+          ? p.description.features.join('; ')
+          : (p?.description?.info || undefined),
       retail_price: { price },
       unit_price: unitPrice,
       in_stock: tescoStock(p),

@@ -1,0 +1,77 @@
+{
+  "_note": "Anonymous xapi.tesco.com responses (region UK, default store) captured 2026-11-04. 253656619 is the Northern Ireland 2L milk from issue #15; outside NI it reports ProductNotFound.",
+  "search": {
+    "data": {
+      "search": {
+        "info": {
+          "total": 28,
+          "page": 1,
+          "count": 2,
+          "pageSize": 2,
+          "offset": 0
+        },
+        "results": [
+          {
+            "node": {
+              "id": "254656543",
+              "tpnb": "54550994",
+              "tpnc": "254656543",
+              "gtin": "05000436589457",
+              "title": "Tesco British Semi Skimmed Milk 2.272L, 4 Pints",
+              "description": [
+                "Pasteurised homogenised semi skimmed milk."
+              ],
+              "status": "AvailableForSale",
+              "isForSale": true,
+              "defaultImageUrl": "https://digitalcontent.api.tesco.com/v2/media/ghs/07531d6d-8bf2-41b5-a5ad-e2ae0a71f2b3/17233543-2c5b-4a06-a0ab-cfdbddcd488e_2028878860.jpeg?h=225&w=225",
+              "price": {
+                "actual": 1.75,
+                "unitPrice": 0.77,
+                "unitOfMeasure": "litre"
+              },
+              "promotions": []
+            }
+          }
+        ]
+      }
+    }
+  },
+  "gbMilk": {
+    "id": "254656543",
+    "tpnb": "54550994",
+    "tpnc": "254656543",
+    "gtin": "05000436589457",
+    "title": "Tesco British Semi Skimmed Milk 2.272L, 4 Pints",
+    "description": [
+      "Pasteurised homogenised semi skimmed milk."
+    ],
+    "status": "AvailableForSale",
+    "isForSale": true,
+    "defaultImageUrl": "https://digitalcontent.api.tesco.com/v2/media/ghs/07531d6d-8bf2-41b5-a5ad-e2ae0a71f2b3/17233543-2c5b-4a06-a0ab-cfdbddcd488e_2028878860.jpeg?h=225&w=225",
+    "price": {
+      "actual": 1.75,
+      "unitPrice": 0.77,
+      "unitOfMeasure": "litre"
+    },
+    "promotions": []
+  },
+  "niMilk": {
+    "id": "253656619",
+    "tpnb": "54425757",
+    "tpnc": "253656619",
+    "gtin": "05000436508298",
+    "title": "Tesco Semi-Skimmed Milk 2 Litres",
+    "description": [
+      "Pasteurised Homogenised Semi-Skimmed Milk. Less than 2% fat."
+    ],
+    "status": "ProductNotFound",
+    "isForSale": false,
+    "defaultImageUrl": "https://digitalcontent.api.tesco.com/v2/media/ghs/1ab2c2b4-7911-4917-b21d-e6b9062d5edb/70ab2db4-0d96-4180-ab6a-f1de0c54a1a8_858194460.jpeg?h=225&w=225",
+    "price": {
+      "actual": 1.6,
+      "unitPrice": 0.8,
+      "unitOfMeasure": "litre"
+    },
+    "promotions": []
+  }
+}
