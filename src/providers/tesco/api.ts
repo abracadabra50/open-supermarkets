@@ -242,11 +242,18 @@ export class TescoAPI {
   // ─────────────────────────────────────────────────────────
 
   async getBasket() {
-    // Query shape confirmed from mfe-trolley bundle (discovery 2026-03-08)
+    // Query shape confirmed from mfe-trolley bundle (discovery 2026-03-08).
+    // isInAmend / amendOrderId / amendExpiry / orderNo are the fields tesco.com's
+    // own GetBasket reads to show its "you're editing order X" banner (bundle
+    // read 2026-11-04). When isInAmend is true this basket IS the upcoming order.
     return this.gql('GetBasket', `
       query GetBasket($basketContexts: [BasketContextType]) {
         basket(basketContexts: $basketContexts) {
           id
+          isInAmend
+          amendOrderId
+          amendExpiry
+          orderNo
           splitView {
             id
             totalPrice

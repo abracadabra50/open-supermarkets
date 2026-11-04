@@ -57,8 +57,10 @@ function requireLogin(provider: ProviderName): string | null {
   return null;
 }
 
-function getProvider(name: ProviderName): FullGroceryProvider {
-  return ProviderFactory.create(name);
+function getProvider(name: ProviderName, amend = false): FullGroceryProvider {
+  const provider = ProviderFactory.create(name);
+  provider.allowOrderAmend?.(amend);
+  return provider;
 }
 
 function textResult(text: string, isError = false) {
@@ -77,6 +79,14 @@ function searchLimit(value: unknown, fallback: number): number {
 }
 
 // ─── Tool definitions ────────────────────────────────────────────
+
+const amendProp = {
+  type: 'boolean',
+  default: false,
+  description:
+    'Allow this change to edit an upcoming order the shopper is amending (Tesco). ' +
+    'Leave false; if the tool says the basket is an order in amend mode, ask the user before retrying with true.',
+};
 
 const providerEnum = { type: 'string', enum: PROVIDERS, description: 'Supermarket provider: sainsburys, ocado, tesco, or tesco-hu (Hungary)' };
 const searchProviderEnum = { type: 'string', enum: [...PROVIDERS, 'lidl-ie'], description: 'Search provider, including Lidl Ireland (search only)' };
@@ -250,6 +260,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           type: 'object',
           properties: {
             provider: { ...providerEnum, default: 'sainsburys' },
+            amend: amendProp,
             product_id: { type: 'string', description: 'Product ID from search results' },
             quantity: { type: 'number', description: 'Quantity to add (default: 1)', default: 1 },
           },
@@ -263,6 +274,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           type: 'object',
           properties: {
             provider: { ...providerEnum, default: 'sainsburys' },
+            amend: amendProp,
             product_id: { type: 'string', description: 'Product or item ID to remove' },
           },
           required: ['product_id'],
@@ -275,6 +287,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           type: 'object',
           properties: {
             provider: { ...providerEnum, default: 'sainsburys' },
+            amend: amendProp,
             item_id: { type: 'string', description: 'Item ID in the basket' },
             quantity: { type: 'number', description: 'New quantity' },
           },
@@ -288,6 +301,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           type: 'object',
           properties: {
             provider: { ...providerEnum, default: 'sainsburys' },
+            amend: amendProp,
           },
         },
       },
@@ -609,8 +623,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const provider = getProvider(providerName);
       const basket = await provider.getBasket();
 
+      const amendNote = basket.amend
+        ? `NOTE: this basket is ${basket.amend.order_no ? `order ${basket.amend.order_no}` : 'an upcoming order'} in amend mode` +
+          `${basket.amend.expires_at ? ` until ${basket.amend.expires_at}` : ''}. Changes edit that delivery.\n\n`
+        : '';
+
       if (basket.items.length === 0) {
-        return textResult(`${providerName} basket is empty.`);
+        return textResult(`${amendNote}${providerName} basket is empty.`);
       }
 
       const formatted = basket.items.map((item, i) =>
@@ -618,7 +637,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       ).join('\n\n');
 
       return textResult(
-        `${providerName.toUpperCase()} Basket - ${money(basket.total_cost, basket.currency)} (${basket.items.length} items):\n\n${formatted}`
+        `${amendNote}${providerName.toUpperCase()} Basket - ${money(basket.total_cost, basket.currency)} (${basket.items.length} items):\n\n${formatted}`
       );
     }
 
@@ -626,7 +645,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     if (name === 'grocery_basket_add') {
       if (loginError) return textResult(loginError, true);
       const { product_id, quantity = 1 } = args as { product_id: string; quantity?: number };
-      const provider = getProvider(providerName);
+      const provider = getProvider(providerName, (args as any).amend === true);
       await provider.addToBasket(product_id, quantity);
       return textResult(`Added ${quantity}x product ${product_id} to ${providerName} basket.`);
     }
@@ -635,7 +654,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     if (name === 'grocery_basket_remove') {
       if (loginError) return textResult(loginError, true);
       const { product_id } = args as { product_id: string };
-      const provider = getProvider(providerName);
+      const provider = getProvider(providerName, (args as any).amend === true);
       await provider.removeFromBasket(product_id);
       return textResult(`Removed product ${product_id} from ${providerName} basket.`);
     }
@@ -644,7 +663,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     if (name === 'grocery_basket_update') {
       if (loginError) return textResult(loginError, true);
       const { item_id, quantity } = args as { item_id: string; quantity: number };
-      const provider = getProvider(providerName);
+      const provider = getProvider(providerName, (args as any).amend === true);
       await provider.updateBasketItem(item_id, quantity);
       return textResult(`Updated item ${item_id} to quantity ${quantity} in ${providerName} basket.`);
     }
@@ -652,7 +671,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     // ── grocery_basket_clear ──
     if (name === 'grocery_basket_clear') {
       if (loginError) return textResult(loginError, true);
-      const provider = getProvider(providerName);
+      const provider = getProvider(providerName, (args as any).amend === true);
       await provider.clearBasket();
       return textResult(`${providerName} basket cleared.`);
     }

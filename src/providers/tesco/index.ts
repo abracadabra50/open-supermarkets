@@ -5,7 +5,8 @@
  * Delivery slots and checkout delegate to Playwright browser files.
  */
 
-import { GroceryProvider, Product, Basket, DeliverySlot, Order, SearchOptions, BasketItem } from '../types';
+import { GroceryProvider, Product, Basket, DeliverySlot, Order, SearchOptions, BasketItem, OrderAmend } from '../types';
+import { OrderAmendError } from '../../errors';
 import { TescoAPI } from './api';
 import { cleanGtin } from '../gtin';
 import { login, loadSession, clearSession, getCookieString } from './auth';
@@ -56,6 +57,7 @@ export function normaliseProduct(p: any, provider: string = 'tesco'): Product {
 export class TescoProvider implements GroceryProvider {
   readonly name = 'tesco';
   private api: TescoAPI;
+  private amendAllowed = false;
 
   constructor() {
     this.api = new TescoAPI();
@@ -118,8 +120,14 @@ export class TescoProvider implements GroceryProvider {
   // ─────────────────────────────────────────────────────────
 
   async getBasket(): Promise<Basket> {
-    const data = await this.api.getBasket();
+    return this.normaliseBasket(await this.api.getBasket());
+  }
 
+  allowOrderAmend(allow: boolean): void {
+    this.amendAllowed = allow;
+  }
+
+  private normaliseBasket(data: any): Basket {
     // GraphQL response shape: data.basket.splitView.items (confirmed from mfe-trolley)
     const basket = data?.basket || data;
     const view = Array.isArray(basket?.splitView) ? basket.splitView[0] : basket?.splitView;
@@ -132,14 +140,23 @@ export class TescoProvider implements GroceryProvider {
       total_quantity: totalItems,
       total_cost: totalPrice,
       provider: this.name,
+      basket_id: basket?.id || undefined,
+      amend: amendOf(basket),
     };
   }
 
-  /** Get the basket orderId needed for UpdateBasket mutations */
+  /**
+   * The basket orderId UpdateBasket needs. Refuses when the basket is an
+   * upcoming order in amend mode, unless the caller opted in: the write would
+   * land in that delivery, which is not what "add to basket" means.
+   */
   private async getBasketOrderId(): Promise<string> {
     const data = await this.api.getBasket();
-    const orderId = data?.basket?.id || data?.id;
+    const basket = data?.basket || data;
+    const orderId = basket?.id;
     if (!orderId) throw new Error('Could not retrieve basket orderId — are you logged in?');
+    const amend = amendOf(basket);
+    if (amend && !this.amendAllowed) throw new OrderAmendError(this.name, amend);
     return orderId;
   }
 
@@ -176,8 +193,8 @@ export class TescoProvider implements GroceryProvider {
   }
 
   async clearBasket(): Promise<void> {
-    const basket = await this.getBasket();
     const orderId = await this.getBasketOrderId();
+    const basket = await this.getBasket();
     for (const item of basket.items) {
       await this.api.updateBasket(item.product_uid, 0, orderId);
     }
@@ -312,4 +329,14 @@ export class TescoProvider implements GroceryProvider {
       total_price: parseFloat(unitPrice) * Number(quantity),
     };
   }
+}
+
+/** Amend state from a raw GetBasket basket, or undefined for a normal trolley. */
+export function amendOf(basket: any): OrderAmend | undefined {
+  if (!basket?.isInAmend) return undefined;
+  return {
+    order_id: String(basket.amendOrderId || basket.id || ''),
+    order_no: basket.orderNo || undefined,
+    expires_at: basket.amendExpiry || undefined,
+  };
 }

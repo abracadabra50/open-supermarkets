@@ -36,7 +36,10 @@ function parsePositiveInt(value: string | null, name: string, defaultValue: numb
 
 function getProvider(url: URL): FullGroceryProvider {
   const providerName = (url.searchParams.get('provider') || defaultProvider) as ProviderName;
-  return ProviderFactory.create(providerName);
+  const provider = ProviderFactory.create(providerName);
+  // amend=1 opts in to writes that edit an upcoming order in amend mode (Tesco).
+  provider.allowOrderAmend?.(['1', 'true'].includes(url.searchParams.get('amend') || ''));
+  return provider;
 }
 
 function sendJson(res: http.ServerResponse, status: number, data: unknown): void {
