@@ -36,7 +36,8 @@ program
   .name(invokedAs.startsWith('groc') ? invokedAs : 'supermarket')
   .description("One command line for the world's supermarkets. Built for agents.")
   .version('3.0.0')
-  .option('-p, --provider <name>', 'Provider id (see `supermarket providers`)', 'sainsburys');
+  .option('-p, --provider <name>', 'Provider id (see `supermarket providers`)', 'sainsburys')
+  .option('--amend', 'Allow basket changes to edit an upcoming order you are amending (Tesco)');
 
 // Parse a string as a positive integer, or throw
 function parsePositiveInt(value: string, name: string): number {
@@ -50,13 +51,15 @@ function parsePositiveInt(value: string, name: string): number {
 // Helper to get provider from options
 function getProvider(options: any) {
   const providerName = options.provider || program.opts().provider;
-  return ProviderFactory.create(providerName as ProviderName);
+  const provider = ProviderFactory.create(providerName as ProviderName);
+  provider.allowOrderAmend?.(Boolean(options.amend ?? program.opts().amend));
+  return provider;
 }
 
 
 function printProducts(products: any[]) {
   products.forEach((p, i) => {
-    const stock = p.in_stock === true ? '✅' : p.in_stock === false ? '❌' : '❔';
+    const stock = p.in_stock === true ? '✅' : p.in_stock === false ? '❌' : 'stock unknown';
     const rating = p.rating ? ` ${p.rating}★ (${p.review_count ?? 0})` : '';
     const size = p.size ? ` / ${p.size}` : '';
     const unit = p.unit_price?.price
@@ -182,7 +185,7 @@ program
         const [first] = providersFor(country, 'search');
         provider = await createProvider(first.id);
       } else {
-        provider = getProvider(globals);
+        provider = await createProvider(globals.provider);
       }
 
       // Batch mode: thirty queries in one invocation instead of thirty.
@@ -476,6 +479,11 @@ program
         console.log(JSON.stringify(basket, null, 2));
       } else {
         console.log(`\n🛒 ${provider.name.toUpperCase()} Basket\n`);
+        if (basket.amend) {
+          const which = basket.amend.order_no ? `order ${basket.amend.order_no}` : 'an upcoming order';
+          const until = basket.amend.expires_at ? ` until ${basket.amend.expires_at}` : '';
+          console.log(`✏️  Editing ${which}${until}. Changes need --amend and go into that delivery.\n`);
+        }
         console.log(`Total: ${money(basket.total_cost, (basket as any).currency)} (${basket.total_quantity} items)\n`);
         
         basket.items.forEach((item, i) => {

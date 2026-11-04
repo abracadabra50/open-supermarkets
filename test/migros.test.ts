@@ -1,4 +1,12 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+
+// Never let tests read or write the real ~/.migros guest session.
+const SESSION_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'migros-test-'));
+process.env.MIGROS_SESSION_FILE = path.join(SESSION_DIR, 'session.json');
+
 import { MigrosProvider, MigrosSession, normaliseBasket, normaliseProduct } from '../src/providers/migros';
 import type { MigrosSearchSession } from '../src/providers/migros';
 
@@ -57,10 +65,12 @@ function fakeBrowser(evaluate: (args: any) => any, closed: string[]) {
   };
   const context: any = {
     newPage: async () => page,
+    storageState: async () => ({ cookies: [{ name: 'guest', value: 'g1' }], origins: [] }),
     close: async () => closed.push('context'),
   };
   return {
-    newContext: async () => context,
+    contextOptions: [] as any[],
+    async newContext(options: any) { this.contextOptions.push(options); return context; },
     close: async () => closed.push('browser'),
   } as any;
 }
@@ -119,6 +129,46 @@ await check('getBasket discovers a dynamic shopping list id and uses online prod
   assert.deepEqual(cards.body.productFilter, { uids: [101] });
   assert.ok(requests.some(request => String(request.url).includes('shoppingListId=dynamic-list')));
   await session.close();
+});
+
+await check('product ids are the uid the basket accepts, not migrosId', () => {
+  const p = normaliseProduct({ uid: 100006357, migrosId: '204003200000', title: 'Whole Milk', offer: { price: { effectiveValue: 1.9 } } });
+  assert.equal(p?.product_uid, '100006357');
+});
+
+await check('the guest basket survives between provider instances', async () => {
+  // CLI/MCP/HTTP build a new provider per call. Without saved guest cookies,
+  // each call got a brand-new empty basket.
+  const file = process.env.MIGROS_SESSION_FILE!;
+  fs.rmSync(file, { force: true });
+  const respond = (args: any) => {
+    if (String(args.url).includes('/guest?')) return { status: 200, contentType: 'application/json', body: '{"userid":"guest-1"}' };
+    if (String(args.url).includes('/lists/overview')) return { status: 200, contentType: 'application/json', body: '[{"shoppingListId":1}]' };
+    return { status: 200, contentType: 'application/json', body: JSON.stringify({ shoppingListId: 1, categories: [], totals: { onlineTotal: { estimatedTotal: 0 } } }) };
+  };
+  const firstClosed: string[] = [];
+  const first = basketBrowser(respond, [], firstClosed);
+  await new MigrosSession(async () => first).addToBasket('101', 1);
+  assert.equal(first.contextOptions[0].storageState, undefined, 'nothing stored yet');
+  assert.deepEqual(JSON.parse(fs.readFileSync(file, 'utf8')).cookies, [{ name: 'guest', value: 'g1' }]);
+  assert.equal((fs.statSync(file).mode & 0o777).toString(8), '600');
+  assert.deepEqual(firstClosed.sort(), ['browser', 'context', 'page'], 'basket calls must close Chromium');
+
+  const second = basketBrowser(respond, []);
+  await new MigrosSession(async () => second).getBasket();
+  assert.equal(second.contextOptions[0].storageState, file, 'second call reuses the guest');
+});
+
+await check('a corrupt session file starts a fresh guest instead of failing', async () => {
+  const file = process.env.MIGROS_SESSION_FILE!;
+  fs.writeFileSync(file, '{not json');
+  const browser = basketBrowser(args => String(args.url).includes('/guest?')
+    ? { status: 200, contentType: 'application/json', body: '{"userid":"guest-1"}' }
+    : String(args.url).includes('/lists/overview')
+      ? { status: 200, contentType: 'application/json', body: '[{"shoppingListId":1}]' }
+      : { status: 200, contentType: 'application/json', body: JSON.stringify({ shoppingListId: 1, categories: [], totals: { onlineTotal: { estimatedTotal: 0 } } }) }, []);
+  await new MigrosSession(async () => browser).getBasket();
+  assert.equal(browser.contextOptions[0].storageState, undefined);
 });
 
 await check('basket writes use PUT, absolute quantities, zero removal and the stored item type', async () => {
@@ -199,8 +249,8 @@ await check('preserves only explicit Migros availability states', () => {
   const base = { migrosId: 'availability', title: 'Availability', offer: { price: { effectiveValue: 1 } } };
   assert.equal(normaliseProduct({ ...base, productAvailability: 'ONLINE' })?.in_stock, true);
   assert.equal(normaliseProduct({ ...base, productAvailability: 'OUT_OF_STOCK' })?.in_stock, false);
-  assert.equal(normaliseProduct({ ...base, productAvailability: 'UNKNOWN' })?.in_stock, undefined);
-  assert.equal(normaliseProduct(base)?.in_stock, undefined);
+  assert.equal(normaliseProduct({ ...base, productAvailability: 'UNKNOWN' })?.in_stock, null);
+  assert.equal(normaliseProduct(base)?.in_stock, null);
 });
 
 await check('search delegates a query and returns products', async () => {
@@ -258,16 +308,24 @@ await check('rejects non-JSON and unexpected API schemas', async () => {
 
 await check('closes page, context and browser after a successful session', async () => {
   const closed: string[] = [];
+  const searches: any[] = [];
   const session = new MigrosSession(async () => fakeBrowser(args => {
     if (String(args.url).includes('/guest?')) {
       return { status: 200, contentType: 'application/json', body: '{"userid":"guest-1"}' };
     }
+    if (String(args.url).includes('/fulfilment-selection')) {
+      return { status: 200, contentType: 'application/json', body: '{"warehouseId":7}' };
+    }
     if (String(args.url).endsWith('/products/search')) {
+      searches.push(args.body);
       return { status: 200, contentType: 'application/json', body: '{"items":[],"numberOfProducts":0}' };
     }
     throw new Error(`unexpected ${args.url}`);
   }, closed));
   assert.deepEqual(await session.search('nothing'), []);
+  // Online catalogue for the guest's warehouse: in-store-only items can't be basketed.
+  assert.equal(searches[0].storeType, 'ONLINE');
+  assert.equal(searches[0].warehouseId, 7);
   await session.close();
   assert.deepEqual(closed, ['page', 'context', 'browser']);
 });

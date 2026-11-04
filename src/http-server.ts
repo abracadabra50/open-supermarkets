@@ -3,6 +3,7 @@
 import http from 'node:http';
 import { URL } from 'node:url';
 import { ProviderFactory, ProviderName } from './providers';
+import { createProvider, supports } from './providers/registry';
 import type { FullGroceryProvider, SearchOptions } from './providers/types';
 
 type FavouritesProvider = FullGroceryProvider & {
@@ -35,7 +36,10 @@ function parsePositiveInt(value: string | null, name: string, defaultValue: numb
 
 function getProvider(url: URL): FullGroceryProvider {
   const providerName = (url.searchParams.get('provider') || defaultProvider) as ProviderName;
-  return ProviderFactory.create(providerName);
+  const provider = ProviderFactory.create(providerName);
+  // amend=1 opts in to writes that edit an upcoming order in amend mode (Tesco).
+  provider.allowOrderAmend?.(['1', 'true'].includes(url.searchParams.get('amend') || ''));
+  return provider;
 }
 
 function sendJson(res: http.ServerResponse, status: number, data: unknown): void {
@@ -85,14 +89,27 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
     });
   }
 
-  const provider = getProvider(url);
-
   if (url.pathname === '/search') {
     const q = requireQuery(url, 'q');
     const limit = parsePositiveInt(url.searchParams.get('limit'), 'limit', 24);
+    const provider = await createProvider(url.searchParams.get('provider') || defaultProvider);
     const products = await provider.search(q, { limit });
     return sendJson(res, 200, { products });
   }
+
+  // Unsupported operations must fail before the legacy factory is called.
+  const basketPaths = ['/add', '/remove', '/update', '/basket'];
+  const favouritePaths = ['/favourites', '/favorites', '/fav-search', '/favorite-search'];
+  if (!basketPaths.includes(url.pathname) && !favouritePaths.includes(url.pathname)) {
+    return sendJson(res, 404, { error: 'Not found' });
+  }
+  const providerId = url.searchParams.get('provider') || defaultProvider;
+  if ((basketPaths.includes(url.pathname) && !supports(providerId, 'basket')) ||
+      (favouritePaths.includes(url.pathname) &&
+       providerId !== 'sainsburys' && providerId !== 'ocado')) {
+    return sendJson(res, 501, { error: `Provider "${providerId}" does not support ${url.pathname}` });
+  }
+  const provider = getProvider(url);
 
   if (url.pathname === '/add') {
     const id = url.searchParams.get('id') || url.searchParams.get('q');

@@ -137,6 +137,65 @@ function scrapeCsrf(html: string): string | null {
   return m ? m[1] : null;
 }
 
+/**
+ * Ocado states a guaranteed product life on most fresh lines:
+ *
+ *   guaranteedProductLife: { quantity: 6, unit: "DAY" }
+ *
+ * It is the number behind the `LIFE 3d+` badge on the site, it arrives in the
+ * same search response the listing scrape already parses, and it was being
+ * dropped on the floor.
+ *
+ * 🔴 AN UNRECOGNISED UNIT RETURNS undefined, NOT A GUESS. Live sampling showed
+ * DAY and WEEK; MONTH and YEAR are handled because they are the obvious
+ * remainder of the enum, but I have not observed them, and Ocado's bot
+ * protection makes exhaustive sampling impractical. If a fifth unit appears,
+ * "no answer" degrades to a name-based estimate upstream, whereas a wrong
+ * number silently mis-sequences a plan. Same reasoning as rejecting a barcode
+ * that fails its check digit.
+ */
+const LIFE_UNIT_DAYS: Record<string, number> = { DAY: 1, WEEK: 7, MONTH: 30, YEAR: 365 };
+
+export function shelfLifeDays(raw?: { quantity?: unknown; unit?: unknown } | null): number | undefined {
+  if (!raw) return undefined;
+  const quantity = Number(raw.quantity);
+  if (!Number.isFinite(quantity) || quantity <= 0) return undefined;
+  // Tolerate "DAYS"/"days" as well as "DAY".
+  const unit = String(raw.unit ?? '').trim().toUpperCase().replace(/S$/, '');
+  const perUnit = LIFE_UNIT_DAYS[unit];
+  if (!perUnit) return undefined;
+  return Math.round(quantity * perUnit);
+}
+
+/**
+ * Map one `productEntities` entry onto the shared `Product` shape.
+ *
+ * Exported as a standalone function — the same shape `tesco-hu` uses — so the
+ * mapping can be regression-tested against a captured entity without
+ * constructing a provider or touching the network.
+ */
+export function normaliseEntity(e: any, provider: string = 'ocado'): Product {
+  const price = num(e?.price?.current?.amount ?? e?.price?.amount);
+  const unit = num(e?.price?.unit?.current?.amount ?? e?.price?.unit?.amount);
+  const rating = num(e?.ratingSummary?.overallRating);
+  return {
+    product_uid: e.productId,
+    name: e.name,
+    description: e.brand ? `Brand: ${e.brand}` : undefined,
+    retail_price: { price: price ?? 0 },
+    unit_price: unit !== undefined
+      ? { measure: e?.size?.value ?? '', price: unit }
+      : undefined,
+    in_stock: e.available !== false,
+    image_url: e?.image ? `${BASE_URL}${e.image}` : undefined,
+    provider,
+    rating,
+    review_count: e?.ratingSummary?.count ?? undefined,
+    size: e?.size?.value ?? undefined,
+    shelf_life_days: shelfLifeDays(e?.guaranteedProductLife),
+  };
+}
+
 export class OcadoProvider implements GroceryProvider {
   readonly name = 'ocado';
   private client: AxiosInstance;
@@ -324,24 +383,7 @@ export class OcadoProvider implements GroceryProvider {
   // ------------------------------------------------------------- mapping --
 
   private mapEntity(e: any): Product {
-    const price = num(e?.price?.current?.amount ?? e?.price?.amount);
-    const unit = num(e?.price?.unit?.current?.amount ?? e?.price?.unit?.amount);
-    const rating = num(e?.ratingSummary?.overallRating);
-    return {
-      product_uid: e.productId,
-      name: e.name,
-      description: e.brand ? `Brand: ${e.brand}` : undefined,
-      retail_price: { price: price ?? 0 },
-      unit_price: unit !== undefined
-        ? { measure: e?.size?.value ?? '', price: unit }
-        : undefined,
-      in_stock: e.available !== false,
-      image_url: e?.image ? `${BASE_URL}${e.image}` : undefined,
-      provider: this.name,
-      rating,
-      review_count: e?.ratingSummary?.count ?? undefined,
-      size: e?.size?.value ?? undefined,
-    };
+    return normaliseEntity(e, this.name);
   }
 
   /**

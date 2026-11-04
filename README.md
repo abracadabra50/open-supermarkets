@@ -2,10 +2,9 @@
 
 # open&#8203;-supermarkets
 
-### The open-source grocery interface for humans and AI agents
+### One open interface to the world's supermarkets
 
-**Search live products and prices, compare retailers, build baskets and check out safely<br>across eleven providers in eight countries.**
-**Search live products and prices, compare retailers, build baskets and check out safely<br>across eleven providers in seven countries.**
+**Search live catalogues and prices, compare retailers, build baskets and automate grocery shopping<br>across 13 provider integrations in 9 countries, through CLI, HTTP and MCP.**
 
 **CLI · HTTP API · MCP · Agent Skills**
 
@@ -13,14 +12,14 @@
 
 [![npm](https://img.shields.io/npm/v/open-supermarkets?color=CB3837&logo=npm&logoColor=white)](https://www.npmjs.com/package/open-supermarkets)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
-[![Countries](https://img.shields.io/badge/countries-8-2ea44f)](#what-works-where)
-[![Providers](https://img.shields.io/badge/providers-11-2ea44f)](#what-works-where)
-[![No credentials](https://img.shields.io/badge/3%20countries-no%20credentials-orange)](#what-works-where)
+[![Countries](https://img.shields.io/badge/countries-9-2ea44f)](#what-works-where)
+[![Providers](https://img.shields.io/badge/providers-13-2ea44f)](#what-works-where)
+[![No credentials](https://img.shields.io/badge/5%20countries-no%20credentials-orange)](#what-works-where)
 [![CI](https://github.com/abracadabra50/open-supermarkets/actions/workflows/ci.yml/badge.svg)](https://github.com/abracadabra50/open-supermarkets/actions/workflows/ci.yml)
 [![MCP](https://img.shields.io/badge/MCP-22%20tools-6E56CF)](#connect-an-agent)
 [![Stars](https://img.shields.io/github/stars/abracadabra50/open-supermarkets?style=flat&color=yellow)](https://github.com/abracadabra50/open-supermarkets/stargazers)
 
-🇬🇧 &nbsp;🇳🇱 &nbsp;🇧🇪 &nbsp;🇪🇸 &nbsp;🇭🇺 &nbsp;🇺🇸 &nbsp;🇨🇦 &nbsp;&nbsp;·&nbsp;&nbsp; [**your country next?**](#bring-your-supermarket)
+🇬🇧 &nbsp;🇮🇪 &nbsp;🇳🇱 &nbsp;🇧🇪 &nbsp;🇪🇸 &nbsp;🇭🇺 &nbsp;🇨🇭 &nbsp;🇺🇸 &nbsp;🇨🇦 &nbsp;&nbsp;·&nbsp;&nbsp; [**your country next?**](#bring-your-supermarket)
 
 </div>
 
@@ -43,8 +42,9 @@ $ supermarket search melk --country NL
   Campina Halfvolle melk           €1.89 / 1,5 l
 ```
 
-**Spain, the Netherlands and Belgium need no credentials at all.** No key, no account,
-no signup. You can query a real supermarket catalogue immediately.
+**Open Supermarkets now spans the UK, Ireland, the Netherlands, Belgium, Spain, Hungary, the US and Canada.**
+Several catalogue providers need no account or retailer credentials at all, while authenticated
+providers progressively expose baskets, slots, orders and checkout.
 
 ---
 
@@ -76,10 +76,15 @@ npx playwright install chromium   # only for browser-auth providers
 
 ---
 
-## What it lets an agent do
+## What Open Supermarkets is
 
-A shopping agent should decide *what* makes sense for the person. Open Supermarkets
-handles the ugly retail plumbing underneath it:
+Open Supermarkets is a common, open-source interface over supermarket storefronts and APIs.
+It normalises the retailer-specific plumbing so applications and agents can work against one
+provider model instead of rebuilding Tesco, Sainsbury's, Ocado, Albert Heijn, Mercadona,
+AhorraMás, Kroger, Instacart and regional integrations independently.
+
+A shopping agent should still decide *what* makes sense for the person. Open Supermarkets
+handles the retail plumbing underneath it:
 
 - search real supermarket catalogues and current prices;
 - compare retailers without forcing every agent to build retailer integrations;
@@ -162,6 +167,7 @@ checkout needs an account, address and payment method, so it exists for fewer.
 | Tesco | 🇬🇧 | ✓ | ✓ | ✓ | ✓ | browser session |
 | Sainsbury's | 🇬🇧 | ✓ | ✓ | ✓ | ✓ | email + password |
 | Ocado | 🇬🇧 | ✓ | ✓ | read-only | — | email + password |
+| Lidl Ireland | 🇮🇪 | ✓ | — | — | — | **none** |
 | Albert Heijn | 🇳🇱 | ✓ | — | — | — | **none** |
 | Albert Heijn België | 🇧🇪 | ✓ | — | — | — | **none** |
 | Mercadona | 🇪🇸 | ✓ | — | — | — | **none** |
@@ -170,18 +176,18 @@ checkout needs an account, address and payment method, so it exists for fewer.
 | Instacart | 🇺🇸 🇨🇦 | ✓ | ✓ | — | via link | partner key |
 | Instacart *(unofficial)* | 🇺🇸 🇨🇦 | ✓ | ✓ | — | — | browser session |
 | Tesco Magyarország | 🇭🇺 | ✓ | ✓ | — | — | browser session (basket only) |
-| Migros | 🇨🇭 | ✓ | — | — | — | live Playwright browser context |
+| Migros | 🇨🇭 | ✓ | ✓ | — | — | **none** (guest basket) |
 
 `supermarket providers` prints this live from the registry. The manifest is the source
 of truth rather than a hand-maintained marketing claim.
 
+Lidl Ireland is search-only. Lidl Plus loyalty prices and conditional multibuy prices are
+not substituted for the regular shelf price. Product availability uses three states:
+`in_stock: true` means available, `false` means explicitly unavailable, and `null` means
+the retailer provided no reliable stock signal. Batch search exposes the same states as `inStock`.
+
 Ocado slot booking and checkout are blocked by AWS WAF. Reading slots works; committing
 to one does not. The manifest therefore does not claim those capabilities.
-
-Migros catalogue search runs inside a live Chromium context because cold HTTP requests
-are blocked by Cloudflare. The provider calls Migros's JSON search API from that browser
-context, then closes the browser after the search; browser cookies are not currently
-reusable by Axios after the browser closes.
 
 ---
 
@@ -254,8 +260,9 @@ Never rely on it as medical or allergy advice. Check the product packaging.
 
 ## Bring your supermarket
 
-This project gets more useful when people add the supermarket they can actually test.
-A search-only provider can be one file plus one manifest entry.
+This project compounds in value as coverage grows. A contributor can add the supermarket
+they can actually test without implementing the entire shopping lifecycle: search-only
+providers are first-class, while basket, slots, checkout and orders are separate capabilities.
 
 **AhorraMás — Spain — search.** Search requires no credentials and reads the
 anonymous Salesforce Commerce Cloud storefront. Availability can depend on the
@@ -302,6 +309,11 @@ personal automation of your own shopping. Understand the terms that apply to you
 **Checkout previews by default.** `supermarket checkout` shows the order and places
 nothing. Spending money requires `--confirm`; the MCP checkout tool defaults to
 `dry_run: true`.
+
+**Upcoming orders are not trolleys.** While a Tesco order is open for amending, the
+account's basket *is* that order, so an add changes the next delivery. Basket writes
+refuse in that state and name the order; pass `--amend` (MCP `amend: true`, HTTP
+`amend=1`) to edit it on purpose. `supermarket basket --json` reports it under `amend`.
 
 **Sessions expire.** Cookie-auth providers need re-importing periodically. Authentication
 failures are surfaced explicitly rather than masquerading as empty search results.

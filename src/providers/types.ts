@@ -11,8 +11,8 @@ export interface Product {
     measure: string;
     price: number;
   };
-  /** Whether the provider explicitly reports availability. Absent means unknown. */
-  in_stock?: boolean;
+  /** Unknown when the retailer supplies no reliable stock signal. */
+  in_stock: boolean | null;
   image_url?: string;
   provider: string; // sainsburys, ocado, tesco, etc.
   /**
@@ -25,6 +25,31 @@ export interface Product {
   rating?: number;       // 0-5 overall rating, when the provider exposes it
   review_count?: number; // number of ratings behind `rating`
   size?: string;         // pack size, e.g. "750g", "6 pack"
+  /**
+   * GTIN-14, when the provider exposes a real barcode.
+   *
+   * This is the only field that means the same thing at two different
+   * retailers, so it is what turns "compare these baskets" from fuzzy name
+   * matching into an exact join — the same argument `kroger.ts` already makes
+   * for Open Food Facts enrichment. Own-label lines have no shared barcode by
+   * definition and simply leave it undefined.
+   *
+   * Always normalised through `gtin.ts` to GTIN-14 and check-digit validated,
+   * because providers disagree about zero-padding: Tesco returns
+   * `05000157024886`, Sainsbury's `5000157024886`.
+   */
+  gtin?: string;
+  /**
+   * Guaranteed remaining life in DAYS from delivery, when the provider states
+   * it. Ocado's `LIFE 3d+` badge is this number.
+   *
+   * Worth a field of its own because it is per-PACK and stated by the retailer:
+   * a generic "milk keeps a week" table cannot tell Cravendale's two weeks from
+   * a fresh organic line's six days, and any caller sequencing a meal plan or
+   * flagging waste needs the difference. Absent means the provider said
+   * nothing — never assume a default.
+   */
+  shelf_life_days?: number;
 }
 
 export interface BasketItem {
@@ -43,6 +68,21 @@ export interface Basket {
   provider: string;
   /** ISO 4217. Absent means GBP, like Product.currency. Non-UK providers must set it. */
   currency?: string;
+  /** Provider's id for this basket, when it has one. */
+  basket_id?: string;
+  /**
+   * Set when the "basket" is really an upcoming order the shopper is amending.
+   * Writes then change that order, not a fresh trolley, so providers refuse
+   * them unless the caller opted in with allowOrderAmend(true).
+   */
+  amend?: OrderAmend;
+}
+
+export interface OrderAmend {
+  order_id: string;
+  order_no?: string;
+  /** ISO time the amend window closes, when the provider says. */
+  expires_at?: string;
 }
 
 export interface DeliverySlot {
@@ -147,6 +187,12 @@ export interface GroceryProvider {
   updateBasketItem?(itemId: string, quantity: number): Promise<void>;
   removeFromBasket?(itemId: string): Promise<void>;
   clearBasket?(): Promise<void>;
+  /**
+   * Opt in to basket writes that edit an upcoming order in amend mode.
+   * Off by default: a write that would silently change someone's next
+   * delivery throws OrderAmendError instead.
+   */
+  allowOrderAmend?(allow: boolean): void;
 
   // ── delivery & checkout ──────────────────────────────────────────────
   getDeliverySlots?(): Promise<DeliverySlot[]>;
@@ -166,4 +212,5 @@ export interface GroceryProvider {
  * `assertCapability()`, which is honest about the fact that most providers in
  * the world do not do checkout.
  */
-export type FullGroceryProvider = Required<GroceryProvider>;
+export type FullGroceryProvider = Required<Omit<GroceryProvider, 'allowOrderAmend'>> &
+  Pick<GroceryProvider, 'allowOrderAmend'>;

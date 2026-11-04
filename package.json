@@ -1,7 +1,7 @@
 {
   "name": "open-supermarkets",
   "version": "3.0.0",
-  "description": "Open-source grocery infrastructure for humans and AI agents. Search live products and prices, compare retailers, build baskets and check out safely across supermarkets worldwide.",
+  "description": "Open-source supermarket infrastructure for humans and AI agents. One interface for live grocery search, prices, comparison, baskets and checkout across retailers and countries.",
   "type": "commonjs",
   "main": "dist/cli.js",
   "bin": {
@@ -22,7 +22,7 @@
     "setup": "./setup.sh",
     "supermarket": "tsx src/cli.ts",
     "prepublishOnly": "npm run build",
-    "test": "tsx test/lazy-loading.test.ts && tsx test/sainsburys-favourites.test.ts && tsx test/tesco-hu.test.ts && tsx test/ahorramas.test.ts && tsx test/mcp-access.test.ts && tsx test/migros.test.ts",
+    "test": "tsx test/lazy-loading.test.ts && tsx test/sainsburys-favourites.test.ts && tsx test/tesco-hu.test.ts && tsx test/ahorramas.test.ts && tsx test/gtin.test.ts && tsx test/ocado-shelf-life.test.ts && tsx test/lidl-ie.test.js && tsx test/mcp-stock.test.ts && tsx test/ie-shared.test.ts && tsx test/mcp-capability.test.ts && tsx test/http-capability.test.ts && tsx test/tesco-amend.test.ts && tsx test/migros.test.ts",
     "test:ahorramas:live": "tsx scripts/ahorramas-live.ts",
     "typecheck": "tsc --noEmit"
   },
@@ -39,7 +39,6 @@
     "agent-skills",
     "cli",
     "tesco",
-    "migros",
     "sainsburys",
     "ocado",
     "albert-heijn",
@@ -50,10 +49,15 @@
     "uk",
     "netherlands",
     "belgium",
-    "switzerland",
     "spain",
     "usa",
-    "canada"
+    "canada",
+    "ahorramas",
+    "tesco-hu",
+    "hungary",
+    "europe",
+    "grocery-api",
+    "price-comparison"
   ],
   "author": "Zishan Ashraf",
   "license": "MIT",

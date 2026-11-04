@@ -17,6 +17,7 @@ is a reason to re-probe, not a reason to stop.
 | Target | US | blocked | RedSky now answers 403 + CAPTCHA challenge |
 | Walmart | US | blocked | consumer GraphQL returns HTTP 418 (bot detection) |
 | Tesco Ireland | IE | needs work | not a header switch; xapi rejects with "Invalid Client" |
+| ~~Lidl Ireland~~ | IE | **BUILT** | anonymous catalogue search, regular EUR prices; stock stays unknown without retailer evidence — see `src/providers/lidl-ie.ts` |
 | ~~Mercadona~~ | ES | **BUILT** | Algolia key found in the frontend bundle — see src/providers/mercadona.ts |
 | ~~Tesco Hungary~~ | HU | **BUILT** | same xapi as the UK, selected by `region: HU` — see src/providers/tesco-hu/ |
 | Tesco Czechia / Slovakia | CZ / SK | likely viable | same platform as Hungary; unverified, needs someone who can test |

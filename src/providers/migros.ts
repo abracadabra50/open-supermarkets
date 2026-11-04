@@ -8,6 +8,9 @@
  * scrape the rendered product cards.
  */
 
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { chromium } from 'playwright';
 import type { Browser, BrowserContext, LaunchOptions, Page } from 'playwright';
 import type { Basket, BasketItem, GroceryProvider, Product, SearchOptions } from './types';
@@ -31,6 +34,14 @@ const CARDS_PATH = '/product-display/public/v4/product-cards';
 const DEFAULT_LIMIT = 10;
 const MAX_LIMIT = 100;
 const REQUEST_TIMEOUT = 30_000;
+/**
+ * The guest basket lives server-side, keyed by cookies on the guest session.
+ * CLI, MCP and HTTP callers build a fresh provider per operation, so those
+ * cookies must outlive the browser or every call gets an empty new basket.
+ */
+export function migrosSessionFile(): string {
+  return process.env.MIGROS_SESSION_FILE || path.join(os.homedir(), '.migros', 'session.json');
+}
 const USER_AGENT =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 ' +
   '(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
@@ -201,8 +212,8 @@ function numberOrUndefined(value: unknown): number | undefined {
   return value;
 }
 
-function stockFromAvailability(availability: unknown): boolean | undefined {
-  if (typeof availability !== 'string') return undefined;
+function stockFromAvailability(availability: unknown): boolean | null {
+  if (typeof availability !== 'string') return null;
 
   switch (availability.toUpperCase()) {
     case 'ONLINE':
@@ -215,7 +226,7 @@ function stockFromAvailability(availability: unknown): boolean | undefined {
     case 'NOT_AVAILABLE':
       return false;
     default:
-      return undefined;
+      return null;
   }
 }
 
@@ -227,7 +238,9 @@ export function normaliseProduct(card: MigrosProductCard, provider = MIGROS.id):
   const inStock = stockFromAvailability(card.productAvailability);
 
   return {
-    product_uid: String(card.migrosId ?? card.migrosOnlineId ?? card.uid ?? ''),
+    // `uid` is the id search returns and the only one the basket resolves.
+    // `migrosId` is accepted by PUT /items but never shows up in the basket.
+    product_uid: String(card.uid ?? card.migrosId ?? card.migrosOnlineId ?? ''),
     name: String(card.title ?? card.name ?? card.description ?? ''),
     description: card.description || undefined,
     retail_price: { price: retailPrice },
@@ -235,7 +248,7 @@ export function normaliseProduct(card: MigrosProductCard, provider = MIGROS.id):
       unitPrice !== undefined && price?.unitPrice?.unit
         ? { price: unitPrice, measure: price.unitPrice.unit }
         : undefined,
-    ...(inStock === undefined ? {} : { in_stock: inStock }),
+    in_stock: inStock,
     image_url: card.images?.find(image => image.url)?.url ?? card.imageTransparent?.url,
     provider,
     currency: MIGROS.currency,
@@ -251,7 +264,43 @@ export class MigrosSession implements MigrosSearchSession {
   private initialising?: Promise<void>;
   private leshopHeader?: string;
 
-  constructor(private readonly launch: MigrosBrowserLauncher = options => chromium.launch(options)) {}
+  constructor(
+    private readonly launch: MigrosBrowserLauncher = options => chromium.launch(options),
+    private readonly sessionFile: string | null = migrosSessionFile()
+  ) {}
+
+  /** Previously saved guest cookies, if any. A corrupt file is ignored, not fatal. */
+  private storedState(): string | undefined {
+    if (!this.sessionFile || !fs.existsSync(this.sessionFile)) return undefined;
+    try {
+      JSON.parse(fs.readFileSync(this.sessionFile, 'utf8'));
+      return this.sessionFile;
+    } catch {
+      return undefined;
+    }
+  }
+
+  private async saveState(): Promise<void> {
+    if (!this.sessionFile || !this.context) return;
+    const state = await this.context.storageState();
+    fs.mkdirSync(path.dirname(this.sessionFile), { recursive: true, mode: 0o700 });
+    fs.writeFileSync(this.sessionFile, JSON.stringify(state), { mode: 0o600 });
+  }
+
+  /**
+   * Run one public operation: open the browser, do the work, save the guest
+   * cookies, close everything. Callers get a provider per operation and no
+   * disposal hook, so nothing may outlive the call.
+   */
+  private async run<T>(work: () => Promise<T>, persist: boolean): Promise<T> {
+    try {
+      const result = await work();
+      if (persist) await this.saveState();
+      return result;
+    } finally {
+      await this.close();
+    }
+  }
 
   private async initialise(): Promise<void> {
     if (this.page) return;
@@ -260,7 +309,11 @@ export class MigrosSession implements MigrosSearchSession {
     this.initialising = (async () => {
       try {
         this.browser = await this.launch({ headless: true });
-        this.context = await this.browser.newContext({ userAgent: USER_AGENT, locale: 'en-CH' });
+        this.context = await this.browser.newContext({
+          userAgent: USER_AGENT,
+          locale: 'en-CH',
+          storageState: this.storedState(),
+        });
         this.page = await this.context.newPage();
 
         const home = await this.page.goto(`${BASE_URL}${HOME_PATH}`, {
@@ -408,7 +461,13 @@ export class MigrosSession implements MigrosSearchSession {
     return assertBasketResponse(details);
   }
 
-  async getBasket(): Promise<Basket> {
+  /** Online warehouse for the guest's (guessed) delivery area. */
+  private async warehouseId(): Promise<number | undefined> {
+    const fulfilment = await this.fetchJson(FULFILMENT_PATH, 'GET', undefined, 'fulfilment selection');
+    return fulfilment && typeof fulfilment.warehouseId === 'number' ? fulfilment.warehouseId : undefined;
+  }
+
+  private async readBasket(): Promise<Basket> {
     const details = await this.basketDetails();
     const items = details.categories.flatMap(category => category.items ?? []);
     const numericIds = items
@@ -417,8 +476,7 @@ export class MigrosSession implements MigrosSearchSession {
     const prices = new Map<string, number>();
 
     if (numericIds.length) {
-      const fulfilment = await this.fetchJson(FULFILMENT_PATH, 'GET', undefined, 'fulfilment selection');
-      const warehouseId = fulfilment && typeof fulfilment.warehouseId === 'number' ? fulfilment.warehouseId : undefined;
+      const warehouseId = await this.warehouseId();
       const cards = await this.fetchJson(
         CARDS_PATH,
         'POST',
@@ -434,7 +492,7 @@ export class MigrosSession implements MigrosSearchSession {
       );
       if (!Array.isArray(cards)) throw new MigrosError('Migros basket product cards have an unexpected schema.');
       for (const card of cards as MigrosProductCard[]) {
-        const uid = String(card.migrosId ?? card.migrosOnlineId ?? card.uid ?? '');
+        const uid = String(card.uid ?? card.migrosId ?? card.migrosOnlineId ?? '');
         const price = numberOrUndefined(card.offer?.price?.effectiveValue ?? card.offer?.price?.advertisedValue);
         if (uid && price !== undefined) prices.set(uid, price);
       }
@@ -443,33 +501,48 @@ export class MigrosSession implements MigrosSearchSession {
     return normaliseBasket(details, prices);
   }
 
+  async getBasket(): Promise<Basket> {
+    return this.run(() => this.readBasket(), true);
+  }
+
   async addToBasket(productId: string, quantity: number): Promise<void> {
-    await this.setBasketItem(productId, quantity, 'PRODUCT');
+    return this.run(() => this.setBasketItem(productId, quantity, 'PRODUCT'), true);
   }
 
   async updateBasketItem(itemId: string, quantity: number): Promise<void> {
+    return this.run(() => this.setExisting(itemId, quantity), true);
+  }
+
+  async removeFromBasket(itemId: string): Promise<void> {
+    return this.run(() => this.setExisting(itemId, 0), true);
+  }
+
+  async clearBasket(): Promise<void> {
+    return this.run(async () => {
+      const basket = await this.basketDetails();
+      for (const item of basket.categories.flatMap(category => category.items ?? [])) {
+        await this.setBasketItem(String(item.id), 0, item.type);
+      }
+    }, true);
+  }
+
+  private async setExisting(itemId: string, quantity: number): Promise<void> {
     const basket = await this.basketDetails();
     const item = basket.categories.flatMap(category => category.items ?? []).find(candidate => String(candidate.id) === itemId);
     if (!item) throw new MigrosError(`Migros basket item not found: ${itemId}`);
     await this.setBasketItem(itemId, quantity, item.type);
   }
 
-  async removeFromBasket(itemId: string): Promise<void> {
-    await this.updateBasketItem(itemId, 0);
-  }
-
-  async clearBasket(): Promise<void> {
-    const basket = await this.basketDetails();
-    for (const item of basket.categories.flatMap(category => category.items ?? [])) {
-      await this.setBasketItem(String(item.id), 0, item.type);
-    }
-  }
-
   async search(query: string, options: SearchOptions = {}): Promise<Product[]> {
-    try {
+    return this.run(() => this.searchOpen(query, options), false);
+  }
+
+  private async searchOpen(query: string, options: SearchOptions): Promise<Product[]> {
+    {
       await this.initialise();
       await this.captureSessionHeader(query);
 
+      const warehouseId = await this.warehouseId();
       const requestedLimit = Math.trunc(options.limit ?? DEFAULT_LIMIT);
       const limit = Math.min(Math.max(requestedLimit, 1), MAX_LIMIT);
       const offset = Math.max(Math.trunc(options.offset ?? 0), 0);
@@ -479,8 +552,11 @@ export class MigrosSession implements MigrosSearchSession {
         {
           query,
           language: 'en',
-          storeType: 'OFFLINE',
+          // The online catalogue, so every result can go in the basket. In-store
+          // items are accepted by the list API and then silently never appear.
+          storeType: 'ONLINE',
           region: 'national',
+          ...(warehouseId === undefined ? {} : { warehouseId }),
           sortFields: [],
           sortOrder: 'asc',
           from: offset,
@@ -502,8 +578,8 @@ export class MigrosSession implements MigrosSearchSession {
         'POST',
         {
           offerFilter: {
-            storeType: 'OFFLINE',
-            region: 'national',
+            storeType: 'ONLINE',
+            ...(warehouseId === undefined ? {} : { warehouseId }),
             ongoingOfferDate: `${new Date().toISOString().slice(0, 10)}T00:00:00`,
           },
           productFilter: {
@@ -518,11 +594,6 @@ export class MigrosSession implements MigrosSearchSession {
       return cards
         .map(card => normaliseProduct(card))
         .filter((product): product is Product => product !== undefined);
-    } finally {
-      // CLI and MCP callers create a provider per operation and do not have a
-      // universal disposal hook. Keep Chromium alive for the complete search,
-      // then close every resource on both success and failure.
-      await this.close();
     }
   }
 

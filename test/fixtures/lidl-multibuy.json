@@ -1,0 +1,109 @@
+{
+  "items": [
+    {
+      "gridbox": {
+        "data": {
+          "canonicalUrl": "/p/realforno-milk-and-honey-shortbread-biscuits/p11143576",
+          "fullTitle": "REALFORNO Milk and Honey Shortbread Biscuits",
+          "price": {
+            "currencyCode": "EUR",
+            "currencyCodeSecond": "",
+            "currencySymbol": "\u20ac",
+            "currencySymbolSecond": "",
+            "discount": {
+              "absoluteDiscount": 0.29,
+              "deletedPrice": 1.79,
+              "discountHasStar": false,
+              "fromRecommendedPrice": false,
+              "hideBargainHint": false,
+              "bargainHintEnabled": false,
+              "bargainHintText": "BargainHint_Text",
+              "percentageDiscount": 16,
+              "showDiscount": true,
+              "showFrom": false,
+              "showPercentage": true,
+              "showUpTo": false
+            },
+            "displayedCurrency": "\u20ac",
+            "hasStar": false,
+            "hasVat": false,
+            "oldPrice": 1.79,
+            "price": 1.5,
+            "priceTheme": "white_red",
+            "specialTaxes": [],
+            "variantsHaveDifferentPrices": false
+          },
+          "regionsPrices": {
+            "1": {
+              "currentPrice": {
+                "basePrice": {
+                  "prefix": false
+                },
+                "currencyCode": "EUR",
+                "currencyCodeSecond": "",
+                "currencySymbol": "\u20ac",
+                "currencySymbolSecond": "",
+                "discount": {
+                  "absoluteDiscount": 0.29,
+                  "deletedPrice": 1.79,
+                  "discountHasStar": false,
+                  "discountText": "Mix 'n' Match 2 for \u20ac3",
+                  "fromNormalPriceForLidlPlus": false,
+                  "fromRecommendedPrice": false,
+                  "hideBargainHint": false,
+                  "bargainHintEnabled": false,
+                  "bargainHintText": "BargainHint_Text",
+                  "percentageDiscount": 16,
+                  "showDiscount": true,
+                  "showFrom": false,
+                  "showPercentage": true,
+                  "showUpTo": false
+                },
+                "displayedCurrency": "\u20ac",
+                "endDate": "2026-11-25T23:59:59Z",
+                "endDateExclusive": "2026-11-26T00:00Z",
+                "hasStar": false,
+                "hasVat": true,
+                "oldPrice": 1.79,
+                "price": 1.5,
+                "priceTheme": "white_red",
+                "specialTaxes": [],
+                "startDate": "2026-09-11T09:54:43.918Z",
+                "superscript": "",
+                "variantsHaveDifferentPrices": false
+              },
+              "futureLidlPlusPrices": []
+            }
+          },
+          "stockAvailability": {
+            "availabilityIndicator": 0,
+            "badgeInfo": {
+              "badges": [
+                {
+                  "text": "in store 06.08 - 25.11",
+                  "type": "IN_STORE_PAST_DATE_RANGE"
+                }
+              ]
+            },
+            "badgeInfoV2": [
+              {
+                "badges": [
+                  {
+                    "text": "in store 06.08 - 25.11",
+                    "type": "IN_STORE_PAST_DATE_RANGE"
+                  }
+                ],
+                "validFrom": 1785970800,
+                "validUntil": 1795651199
+              }
+            ],
+            "onlineAvailable": false,
+            "minOrderableQuantity": 1,
+            "backInStockNotification": false,
+            "backInStockNotificationSoldOut": false
+          }
+        }
+      }
+    }
+  ]
+}

@@ -223,10 +223,11 @@ async function selectBestProvider(product: string, preferences: any) {
       score += 10;
     }
     
-    // Availability (10% weight)
-    if (bestProduct.in_stock) {
-      score += 10;
-    }
+    // Availability (10% weight): unknown is less certain than available,
+    // but is not an explicit out-of-stock signal.
+    const availabilityScore = bestProduct.in_stock === true ? 10
+      : bestProduct.in_stock === null ? 5 : 0;
+    score += availabilityScore;
     
     return {
       provider,
@@ -236,7 +237,7 @@ async function selectBestProvider(product: string, preferences: any) {
         price: priceScore,
         quality: qualityScores[provider],
         preference: preferences.preferredProviders?.includes(provider) ? 20 : 10,
-        availability: bestProduct.in_stock ? 10 : 0
+        availability: availabilityScore
       }
     };
   });
@@ -278,7 +279,7 @@ async function findSubstitute(originalProduct: string, reason: 'out_of_stock' | 
   
   // Filter by reason
   if (reason === 'out_of_stock') {
-    const inStock = results.filter(r => r.in_stock);
+    const inStock = results.filter(r => r.in_stock === true);
     return {
       found: inStock.length > 0,
       suggestion: inStock[0],

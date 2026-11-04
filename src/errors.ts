@@ -39,6 +39,26 @@ function alreadyExplained(message: string): boolean {
   return message.length > 40;
 }
 
+/**
+ * Thrown when a basket write would edit an upcoming order rather than a fresh
+ * trolley. Tesco does this whenever the shopper has an order open for
+ * amending: the account's only basket *is* that order. Silently adding to
+ * someone's next delivery is the worst kind of wrong, so it takes an opt-in.
+ */
+export class OrderAmendError extends Error {
+  readonly code = 'ORDER_AMEND';
+  constructor(readonly provider: string, readonly amend: import('./providers/types').OrderAmend) {
+    const which = amend.order_no ? `order ${amend.order_no}` : 'an upcoming order';
+    const until = amend.expires_at ? ` (amend window closes ${amend.expires_at})` : '';
+    super(
+      `The ${provider} basket is currently ${which}${until}, so this change would edit that order, ` +
+      `not start a new trolley. Re-run with --amend (CLI), amend: true (MCP) or amend=1 (HTTP) to edit it on purpose, ` +
+      `or finish or cancel the amend on ${provider} first.`
+    );
+    this.name = 'OrderAmendError';
+  }
+}
+
 export function explain(err: any, opts: ExplainOptions = {}): string {
   const raw: string = err?.message ?? String(err);
   const status = statusOf(err);

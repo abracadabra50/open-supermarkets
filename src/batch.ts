@@ -42,7 +42,7 @@ export interface LeanProduct {
   currency: string;
   size?: string;
   unit?: string;
-  inStock?: boolean;
+  inStock: boolean | null;
 }
 
 export function lean(p: Product): LeanProduct {
@@ -139,6 +139,8 @@ export async function batchAdd(
       await provider.addToBasket(id, qty);
       results.push({ id, qty, ok: true });
     } catch (err: any) {
+      // Every remaining add would hit the same amend guard; one clear error beats N.
+      if (err?.code === 'ORDER_AMEND') throw err;
       results.push({ id, qty, ok: false, error: err?.message ?? String(err) });
     }
   }
