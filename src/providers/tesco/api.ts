@@ -43,6 +43,23 @@ export const PRODUCT_FIELDS = `
   promotions { description price { afterDiscount } unitSellingInfo }
 `;
 
+/**
+ * In-store stock and aisle, on top of PRODUCT_FIELDS (#7).
+ *
+ * `availability.status` is IN_STOCK | LOW_STOCK | OUT_OF_STOCK | UNKNOWN, or
+ * null when the store does not range the product. `productLocation` lists the
+ * aisle once per shelf position. Both are scoped to `storeId` when given,
+ * otherwise to the session's store (or Tesco's default when anonymous).
+ * Verified against anonymous xapi responses on 2026-11-04. No account needed.
+ */
+export const STORE_STOCK_FIELDS = `${PRODUCT_FIELDS}
+  availability { ... on SelectedStoreProductAvailabilityType { status } }
+  productLocation { ... on StoreProductLocationType { aisle } }
+`;
+
+/** xapi's answer to a storeId it can't resolve. */
+const UNKNOWN_STORE = /location endpoint received status: 404/i;
+
 // Static API key baked into Tesco's mfe-* bundles (confirmed from discovery)
 const TESCO_API_KEY = 'TvOSZJHlEk0pjniDGQFAc9Q59WGAR4dA';
 
@@ -58,6 +75,11 @@ function tescoSessionHelp(status?: number): string {
     'If it has expired, log in again or import fresh browser cookies:',
     '`groc --provider tesco import-session --file ~/Downloads/tesco-cookies.json`',
   ].join(' ');
+}
+
+function unknownStore(storeId?: string): string {
+  return `Tesco does not recognise store id "${storeId}". Use the numeric store id ` +
+    `(e.g. 3060), not a store name or postcode.`;
 }
 
 export class TescoAPI {
@@ -167,6 +189,46 @@ export class TescoAPI {
       }
     `, { query, page, count, sortBy: 'relevance' });
     return (data?.search?.results ?? []).map((r: any) => r?.node).filter(Boolean).slice(0, count); // count is a hint to xapi
+  }
+
+  /** Store stock for several products in one batched request. */
+  async getStoreStock(tpncs: string[], storeId?: string): Promise<any[]> {
+    if (!tpncs.length) return [];
+    const query = `
+      query StoreStock($tpnc: String, $storeId: ID) {
+        product(tpnc: $tpnc, storeId: $storeId) { ${STORE_STOCK_FIELDS} }
+      }
+    `;
+    const response = await this.client.post(XAPI_URL, tpncs.map((tpnc) => ({
+      operationName: 'StoreStock',
+      variables: storeId ? { tpnc, storeId } : { tpnc },
+      query,
+    })));
+    const results: any[] = Array.isArray(response.data) ? response.data : [response.data];
+    return results.map((r, i) => {
+      const message = (r?.errors ?? []).map((e: any) => e?.message).join(', ');
+      if (UNKNOWN_STORE.test(message)) throw new Error(unknownStore(storeId));
+      if (message && !r?.data?.product) throw new Error(`GraphQL error (StoreStock ${tpncs[i]}): ${message}`);
+      return r?.data?.product ?? null;
+    });
+  }
+
+  /** Search one store's range, with stock and aisle for each result. */
+  async searchStoreStock(query: string, count: number = 10, storeId?: string): Promise<any[]> {
+    try {
+      const data = await this.gql('StoreSearch', `
+        query StoreSearch($query: String!, $count: Int, $storeId: ID) {
+          search(query: $query, page: 1, count: $count, storeId: $storeId) {
+            results { node { ... on ProductType { ${STORE_STOCK_FIELDS} } } }
+          }
+        }
+      `, storeId ? { query, count, storeId } : { query, count });
+      return (data?.search?.results ?? []).map((r: any) => r?.node).filter(Boolean).slice(0, count);
+    } catch (err: any) {
+      // Search reports an unknown store as a bare "Not Found".
+      if (storeId && /Not Found|location endpoint/i.test(err?.message ?? '')) throw new Error(unknownStore(storeId));
+      throw err;
+    }
   }
 
   async getProduct(tpnc: string) {

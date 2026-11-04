@@ -1,0 +1,197 @@
+{
+  "_note": "Anonymous xapi.tesco.com StoreStock/StoreSearch responses at storeId 3060, captured 2026-11-04 (the LOW_STOCK and second aisle on the red pepper houmous are edited in to cover those branches). Unknown store ids come back as the error \"location endpoint received status: 404\".",
+  "milk": {
+    "id": "254656543",
+    "tpnb": "54550994",
+    "tpnc": "254656543",
+    "gtin": "05000436589457",
+    "title": "Tesco British Semi Skimmed Milk 2.272L, 4 Pints",
+    "description": [
+      "Pasteurised homogenised semi skimmed milk."
+    ],
+    "status": "AvailableForSale",
+    "isForSale": true,
+    "defaultImageUrl": "https://digitalcontent.api.tesco.com/v2/media/ghs/07531d6d-8bf2-41b5-a5ad-e2ae0a71f2b3/17233543-2c5b-4a06-a0ab-cfdbddcd488e_2028878860.jpeg?h=225&w=225",
+    "price": {
+      "actual": 1.75,
+      "unitPrice": 0.77,
+      "unitOfMeasure": "litre"
+    },
+    "promotions": [],
+    "availability": {
+      "status": "IN_STOCK"
+    },
+    "productLocation": [
+      {
+        "aisle": "40"
+      },
+      {
+        "aisle": "40"
+      },
+      {
+        "aisle": "40"
+      },
+      {
+        "aisle": "40"
+      },
+      {
+        "aisle": "40"
+      },
+      {
+        "aisle": "40"
+      },
+      {
+        "aisle": "40"
+      },
+      {
+        "aisle": "40"
+      },
+      {
+        "aisle": "40"
+      },
+      {
+        "aisle": "40"
+      },
+      {
+        "aisle": "40"
+      },
+      {
+        "aisle": "40"
+      },
+      {
+        "aisle": "40"
+      },
+      {
+        "aisle": "40"
+      },
+      {
+        "aisle": "40"
+      },
+      {
+        "aisle": "40"
+      },
+      {
+        "aisle": "40"
+      },
+      {
+        "aisle": "40"
+      },
+      {
+        "aisle": "40"
+      },
+      {
+        "aisle": "40"
+      },
+      {
+        "aisle": "40"
+      },
+      {
+        "aisle": "40"
+      },
+      {
+        "aisle": "40"
+      },
+      {
+        "aisle": "40"
+      },
+      {
+        "aisle": "40"
+      },
+      {
+        "aisle": "40"
+      },
+      {
+        "aisle": "40"
+      },
+      {
+        "aisle": "40"
+      },
+      {
+        "aisle": "40"
+      },
+      {
+        "aisle": "40"
+      },
+      {
+        "aisle": "40"
+      },
+      {
+        "aisle": "40"
+      },
+      {
+        "aisle": "40"
+      },
+      {
+        "aisle": "40"
+      },
+      {
+        "aisle": "40"
+      }
+    ]
+  },
+  "bread": {
+    "id": "306278259",
+    "tpnb": "87912856",
+    "tpnc": "306278259",
+    "title": "Tesco White Toastie Thick Sliced Bread 800g",
+    "status": "ProductNotFound",
+    "isForSale": false,
+    "price": {
+      "actual": 0.75
+    },
+    "availability": null,
+    "productLocation": []
+  },
+  "houmous": [
+    {
+      "id": "320968345",
+      "title": "Tesco Houmous 200g ",
+      "status": "AvailableForSale",
+      "isForSale": true,
+      "price": {
+        "actual": 1.3
+      },
+      "availability": {
+        "status": "IN_STOCK"
+      },
+      "productLocation": [
+        {
+          "aisle": "43"
+        },
+        {
+          "aisle": "43"
+        }
+      ]
+    },
+    {
+      "id": "320673572",
+      "title": "Tesco Red Pepper Houmous 182g ",
+      "status": "AvailableForSale",
+      "isForSale": true,
+      "price": {
+        "actual": 1.3
+      },
+      "availability": {
+        "status": "LOW_STOCK"
+      },
+      "productLocation": [
+        {
+          "aisle": "43"
+        },
+        {
+          "aisle": "44"
+        }
+      ]
+    }
+  ],
+  "unknownStoreError": {
+    "errors": [
+      {
+        "message": "location endpoint received status: 404"
+      }
+    ],
+    "data": {
+      "product": null
+    }
+  }
+}

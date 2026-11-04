@@ -901,6 +901,54 @@ program
     }
   });
 
+// Tesco: in-store stock and aisle (read-only, no account needed)
+program
+  .command('store-stock [product-ids...]')
+  .description('Tesco only — in-store stock and aisle at a store, by product id or --query')
+  .option('-s, --store <id>', 'Numeric Tesco store id (default: SUPERMARKET_TESCO_STORE, else your session/default store)')
+  .option('-q, --query <text>', "Search the store's range instead of giving product ids")
+  .option('-l, --limit <number>', 'Max results for --query', '10')
+  .option('--json', 'Output as JSON')
+  .action(async (productIds: string[], options, cmd) => {
+    const providerName = cmd.optsWithGlobals().provider;
+    if (providerName !== 'tesco') {
+      console.error('❌ store-stock is only available for --provider tesco');
+      process.exit(1);
+    }
+    if (!productIds.length && !options.query) {
+      console.error('❌ Give one or more product ids, or --query <text>.');
+      process.exit(1);
+    }
+    try {
+      const { TescoProvider } = await import('./providers/tesco/index');
+      const tesco = new TescoProvider();
+      const storeId: string | undefined = options.store || process.env.SUPERMARKET_TESCO_STORE || undefined;
+      const results = options.query
+        ? await tesco.searchStoreStock(options.query, { limit: parsePositiveInt(options.limit, 'limit'), storeId })
+        : await tesco.storeStock(productIds, storeId);
+
+      if (options.json) {
+        console.log(JSON.stringify({ store_id: storeId ?? null, results }, null, 2));
+        return;
+      }
+      const where = storeId ? `store ${storeId}` : 'your session store (or Tesco\'s default)';
+      console.log(`\n🏬 Tesco in-store stock at ${where}\n`);
+      if (!results.length) console.log('No products found.\n');
+      const label: Record<string, string> = {
+        in_stock: '✅ In stock', low_stock: '⚠️  Low stock', out_of_stock: '❌ Out of stock',
+        not_ranged: '🚫 Not sold at this store', unknown: '❔ Stock unknown',
+      };
+      for (const r of results) {
+        const aisle = r.aisles.length ? ` · aisle ${r.aisles.join(', ')}` : '';
+        console.log(`${r.product.name}`);
+        console.log(`   ${label[r.stock]}${aisle} · ${money(r.product.retail_price.price)} | ID: ${r.product.product_uid}\n`);
+      }
+    } catch (error: any) {
+      console.error('❌ Store stock check failed:', explain(error, { provider: 'tesco', action: 'check store stock' }));
+      process.exit(1);
+    }
+  });
+
 // Tesco: staples management
 program
   .command('staples')

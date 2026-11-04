@@ -111,6 +111,22 @@ npm run groc -- --provider tesco staples --add
 npm run groc -- --provider tesco staples --json
 ```
 
+### Tesco-Specific: In-Store Stock and Aisle
+
+Read-only and needs no account. Use it when the user is shopping in person and asks whether a store has something, or where it is.
+
+```bash
+# Stock + aisle for products at store 3060
+npm run groc -- --provider tesco store-stock 254656543 320968345 --store 3060
+
+# Search a store's range, with stock + aisle per result
+npm run groc -- --provider tesco store-stock --store 3060 --query "houmous" --json
+```
+
+- Stock is one of `in_stock`, `low_stock`, `out_of_stock`, `not_ranged` (the store doesn't sell it) or `unknown`. Treat `unknown` as unknown.
+- `--store` takes Tesco's numeric store id. `SUPERMARKET_TESCO_STORE` sets a default. Without either, Tesco answers for the session's store, or its own default when there is no session.
+- There is no store finder yet: the CLI can't turn a postcode into a store id.
+
 ### Tesco-Specific: Session Import
 ```bash
 npm run groc -- --provider tesco import-session --file <cookies.json>
