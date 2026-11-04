@@ -121,7 +121,9 @@ Do not blindly select the first or cheapest absolute-price result.
 
 Treat availability as a truth claim.
 
-If a provider can distinguish unknown availability, do not convert unknown into out-of-stock or in-stock.
+`in_stock` (`inStock` in batch output) is `true`, `false` or `null`. `null` means the retailer did not say. Do not read it as in-stock or out-of-stock. Tell the user it is unknown, or check before checkout.
+
+A `null` price (shown as "price unknown") is not zero. Never treat it as the cheapest option, and do not quote a basket total that includes it.
 
 | `in_stock` / batch `inStock` | Meaning |
 |---|---|

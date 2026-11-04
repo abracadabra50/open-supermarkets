@@ -185,7 +185,7 @@ program
           const trolley = data.trolley.trolley_details;
           console.log(`\n🛒 Your Basket\n`);
           console.log(`Items: ${trolley.total_quantity || 0}`);
-          console.log(`Subtotal: ${money(trolley.total_cost || 0)}\n`);
+          console.log(`Subtotal: ${money(trolley.total_cost)}\n`);
           
           if (trolley.products && trolley.products.length > 0) {
             trolley.products.forEach((item: any) => {

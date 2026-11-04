@@ -1,10 +1,18 @@
 import axios, { AxiosInstance } from 'axios';
 import { GroceryProvider, Product, Basket, DeliverySlot, Order, SearchOptions, BasketItem } from './types';
+import { perUnit, toPrice } from './normalise';
 import { login } from '../auth/login';
 import { firstValidGtin } from './gtin';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+
+/** Either flag saying no wins; either saying yes counts; neither means unknown. */
+function sainsburysStock(p: any): boolean | null {
+  if (p?.in_stock === false || p?.is_available === false) return false;
+  if (p?.in_stock === true || p?.is_available === true) return true;
+  return null;
+}
 
 const API_BASE = 'https://www.sainsburys.co.uk/groceries-api/gol-services';
 const SESSION_FILE = path.join(os.homedir(), '.sainsburys', 'session.json');
@@ -21,9 +29,9 @@ export function normaliseProduct(p: any, provider: string = 'sainsburys'): Produ
     product_uid: p.product_uid,
     name: p.name,
     description: p.description || p.short_description,
-    retail_price: p.retail_price,
+    retail_price: { price: toPrice(p.retail_price?.price) },
     unit_price: p.unit_price,
-    in_stock: p.in_stock !== false && p.is_available !== false,
+    in_stock: sainsburysStock(p),
     image_url: p.image || p.assets?.plp_image,
     provider,
     // `eans` is an array because a product can carry more than one barcode —
@@ -243,11 +251,11 @@ export class SainsburysProvider implements GroceryProvider {
         product_uid: item.product?.sku,
         name: item.product?.name,
         quantity: item.quantity,
-        unit_price: parseFloat(item.subtotal_price) / item.quantity,
-        total_price: parseFloat(item.subtotal_price || 0)
+        unit_price: perUnit(toPrice(item.subtotal_price), item.quantity),
+        total_price: toPrice(item.subtotal_price)
       })) || [],
       total_quantity: data.item_count || 0,
-      total_cost: parseFloat(data.total_price || 0),
+      total_cost: toPrice(data.total_price),
       provider: this.name
     };
   }

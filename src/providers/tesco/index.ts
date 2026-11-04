@@ -7,9 +7,17 @@
 
 import { GroceryProvider, Product, Basket, DeliverySlot, Order, SearchOptions, BasketItem, OrderAmend } from '../types';
 import { OrderAmendError } from '../../errors';
+import { toPrice } from '../normalise';
 import { TescoAPI } from './api';
 import { cleanGtin } from '../gtin';
 import { login, loadSession, clearSession, getCookieString } from './auth';
+
+/** A no from any field wins; isAvailable: true counts; otherwise unknown. */
+export function tescoStock(p: any): boolean | null {
+  if (p?.isAvailable === false || p?.maxQuantityAllowed === 0 || p?.maxQuantity === 0) return false;
+  if (p?.isAvailable === true) return true;
+  return null;
+}
 
 /**
  * Map one xapi product onto the shared `Product` shape.
@@ -22,8 +30,8 @@ export function normaliseProduct(p: any, provider: string = 'tesco'): Product {
     // Price: try displayPrice, unitPrice, then fall back to promotion afterDiscount
     const promoPrice = p?.promotions?.[0]?.price?.afterDiscount;
     const promoUnit = p?.promotions?.[0]?.unitSellingInfo; // e.g. "£0.20/each"
-    const price = parseFloat(
-      p?.displayPrice?.value || p?.unitPrice?.price || p?.price?.actual || promoPrice || 0
+    const price = toPrice(
+      p?.displayPrice?.value || p?.unitPrice?.price || p?.price?.actual || promoPrice
     );
 
     // Unit price from unitSellingInfo string e.g. "£1.20/100g"
@@ -48,7 +56,7 @@ export function normaliseProduct(p: any, provider: string = 'tesco'): Product {
         : (p?.description?.info || undefined),
       retail_price: { price },
       unit_price: unitPrice,
-      in_stock: p?.isAvailable !== false && p?.maxQuantityAllowed !== 0 && p?.maxQuantity !== 0,
+      in_stock: tescoStock(p),
       image_url: p?.defaultImageUrl || undefined,
       provider,
     };

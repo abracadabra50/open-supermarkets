@@ -33,7 +33,8 @@
  */
 
 import axios, { AxiosInstance } from 'axios';
-import type { Basket, Product, SearchOptions } from './types';
+import type { Basket, BasketItem, Product, SearchOptions } from './types';
+import { sumKnown, toPrice, toStock } from './normalise';
 
 const ENDPOINT = 'https://www.instacart.com/graphql';
 
@@ -218,17 +219,13 @@ export class InstacartWebProvider {
     return items.map((item: any): Product => {
       const view = item?.viewSection ?? {};
       // Prices come back as display strings ("$4.99") more often than numbers.
-      const raw = view.priceString ?? item?.pricing?.price ?? 0;
-      const price =
-        typeof raw === 'number'
-          ? raw
-          : Number(String(raw).replace(/[^0-9.]/g, '')) || 0;
+      const price = toPrice(view.priceString ?? item?.pricing?.price);
 
       return {
         product_uid: String(item?.id ?? ''),
         name: item?.name ?? view.titleString ?? '(unnamed)',
         retail_price: { price },
-        in_stock: item?.available !== false,
+        in_stock: toStock(item?.available),
         currency: 'USD',
         image_url: view.itemImage?.url ?? item?.imageUrl,
         provider: this.name,
@@ -245,14 +242,14 @@ export class InstacartWebProvider {
       product_uid: String(i?.itemId ?? i?.id ?? ''),
       name: i?.name ?? '(unnamed)',
       quantity: Number(i?.quantity ?? 1),
-      unit_price: Number(i?.pricing?.unitPrice ?? 0),
-      total_price: Number(i?.pricing?.total ?? 0),
+      unit_price: toPrice(i?.pricing?.unitPrice),
+      total_price: toPrice(i?.pricing?.total),
     }));
 
     return {
       items,
       total_quantity: items.reduce((n: number, i: any) => n + i.quantity, 0),
-      total_cost: items.reduce((n: number, i: any) => n + i.total_price, 0),
+      total_cost: sumKnown(items.map((i: BasketItem) => i.total_price)),
       provider: this.name,
     };
   }

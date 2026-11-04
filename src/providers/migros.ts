@@ -14,6 +14,7 @@ import path from 'node:path';
 import { chromium } from 'playwright';
 import type { Browser, BrowserContext, LaunchOptions, Page } from 'playwright';
 import type { Basket, BasketItem, GroceryProvider, Product, SearchOptions } from './types';
+import { sumKnown, toPrice } from './normalise';
 
 export const MIGROS = {
   id: 'migros',
@@ -98,20 +99,22 @@ export function normaliseBasket(
 ): Basket {
   const items = details.categories.flatMap(category => category.items ?? []);
   const basketItems: BasketItem[] = items.map(item => {
-    const unitPrice = prices.get(String(item.id)) ?? 0;
+    // Lines without an online product card (promotions, delisted items) have
+    // no known price. That's unknown, not free.
+    const unitPrice = prices.get(String(item.id)) ?? null;
     return {
       item_id: String(item.id),
       product_uid: String(item.id),
       name: item.name ?? String(item.id),
       quantity: item.quantity,
       unit_price: unitPrice,
-      total_price: unitPrice * item.quantity,
+      total_price: unitPrice !== null ? unitPrice * item.quantity : null,
     };
   });
   return {
     items: basketItems,
     total_quantity: basketItems.reduce((sum, item) => sum + item.quantity, 0),
-    total_cost: details.totals.onlineTotal.estimatedTotal,
+    total_cost: toPrice(details.totals?.onlineTotal?.estimatedTotal) ?? sumKnown(basketItems.map(item => item.total_price)),
     provider: MIGROS.id,
     currency: MIGROS.currency,
   };

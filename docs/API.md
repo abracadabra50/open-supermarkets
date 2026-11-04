@@ -86,7 +86,7 @@ interface Product {
   description?: string;
 
   retail_price: {
-    price: number;
+    price: number | null;   // null = unknown, never 0
   };
 
   unit_price?: {
@@ -94,7 +94,7 @@ interface Product {
     price: number;
   };
 
-  in_stock: boolean | null; // true: available; false: explicitly unavailable; null: no reliable signal
+  in_stock: boolean | null; // null = the retailer did not say
   image_url?: string;
   provider: string;
   currency?: string;
@@ -106,17 +106,13 @@ interface Product {
 
 `currency` is ISO 4217. Older UK providers may omit it, in which case consumers historically treated the value as GBP. New non-UK providers must set it explicitly.
 
-Availability is a three-state contract:
+Missing data is `null`, never an invented value:
 
-| `in_stock` / batch `inStock` | Meaning |
-|---|---|
-| `true` | In stock |
-| `false` | Explicitly out of stock |
-| `null` | Retailer did not provide a reliable stock signal |
+- `retail_price.price` is `null` when the retailer gave no usable price. `0` means genuinely free.
+- `in_stock` is `true` or `false` only when the retailer said so, and `null` otherwise.
+- Basket `unit_price`/`total_price` and `total_cost` are `null` when the retailer does not expose them reliably. A total is only computed from lines when every line price is known.
 
-Use strict equality when branching on stock. `!product.in_stock` conflates unavailable and unknown; `product.in_stock === false` identifies only explicit out-of-stock signals.
-
-Providers that cannot yet distinguish unknown availability still report a boolean; see the provider specification before introducing new fallback semantics.
+The CLI and MCP print these as "price unknown" and "Stock unknown". Price comparisons sort unknown prices last and never mark them as the cheapest. Shared helpers live in `src/providers/normalise.ts` (`toPrice`, `toStock`, `sumKnown`, `perUnit`) and `src/format.ts` (`money`, `stockLabel`, `byPrice`, `cheapest`).
 
 ## Search
 
