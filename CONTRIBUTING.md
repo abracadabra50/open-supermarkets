@@ -89,9 +89,9 @@ npm run build
 npm test
 ```
 
-Then confirm that **the new tests are actually invoked by `npm test`**. A green workflow is not useful if the test file is orphaned or a duplicated JSON key caused the intended script to be ignored.
-
 CI is designed to run without retailer credentials so PRs from forks remain verifiable.
+
+`npm test` runs every file under `test/` named `*.test.ts` or `*.test.js` (fixtures excluded), each in its own process; a non-zero exit fails the run. There is no list to update: name the file correctly and it runs. Run one file with `node scripts/run-tests.js <name>`. Tests that hit a live retailer belong in `scripts/` behind their own npm script, never under `test/`. The runner prints `▶ test/<file>` for each file it runs, so check yours is in the list.
 
 ## Correctness rules
 
