@@ -61,6 +61,15 @@ async function main() {
     assert.strictEqual(toGtin14('614141000036'), '00614141000036'); // GTIN-12
   });
 
+  await check('a UPC-A with leading zeros keeps its length and validates', () => {
+    // 036000291452 is a real 12-digit UPC-A. Its significant digits are only
+    // 11 long, so it must be length-checked as supplied, not after stripping.
+    assert.strictEqual(cleanGtin('036000291452'), '00036000291452');
+    assert.strictEqual(cleanGtin('0036000291452'), '00036000291452');
+    assert.strictEqual(cleanGtin('00036000291452'), '00036000291452');
+    assert.strictEqual(toGtin14('00000000000000'), undefined);
+  });
+
   await check('an internal product code is not a barcode', () => {
     // An Ocado SKU like 78914011 is eight digits, which is a legal GTIN-8
     // LENGTH — so normalisation alone accepts it and returns something that

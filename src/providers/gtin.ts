@@ -15,13 +15,15 @@
 /** Digits only, widened to GTIN-14. Returns undefined if it is not a GTIN. */
 export function toGtin14(raw?: string | number | null): string | undefined {
   if (raw === undefined || raw === null) return undefined;
-  const digits = String(raw).replace(/\D/g, '').replace(/^0+/, '');
-  if (!digits) return undefined;
+  const digits = String(raw).replace(/\D/g, '');
   // GTIN-8, -12, -13 and -14 are the only valid lengths. Anything else is an
   // internal product code that happens to be numeric — a Tesco TPNB, say — and
   // treating one of those as a barcode is worse than having none, because it
-  // silently matches nothing while looking authoritative.
+  // silently matches nothing while looking authoritative. The length is judged
+  // as supplied, before padding: a UPC-A such as 036000291452 legitimately
+  // starts with zeros, and stripping them first would leave 11 digits.
   if (![8, 12, 13, 14].includes(digits.length)) return undefined;
+  if (/^0+$/.test(digits)) return undefined;
   return digits.padStart(14, '0');
 }
 
