@@ -309,6 +309,11 @@ personal automation of your own shopping. Understand the terms that apply to you
 nothing. Spending money requires `--confirm`; the MCP checkout tool defaults to
 `dry_run: true`.
 
+**Upcoming orders are not trolleys.** While a Tesco order is open for amending, the
+account's basket *is* that order, so an add changes the next delivery. Basket writes
+refuse in that state and name the order; pass `--amend` (MCP `amend: true`, HTTP
+`amend=1`) to edit it on purpose. `supermarket basket --json` reports it under `amend`.
+
 **Sessions expire.** Cookie-auth providers need re-importing periodically. Authentication
 failures are surfaced explicitly rather than masquerading as empty search results.
 

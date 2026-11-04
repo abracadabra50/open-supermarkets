@@ -68,6 +68,21 @@ export interface Basket {
   provider: string;
   /** ISO 4217. Absent means GBP, like Product.currency. Non-UK providers must set it. */
   currency?: string;
+  /** Provider's id for this basket, when it has one. */
+  basket_id?: string;
+  /**
+   * Set when the "basket" is really an upcoming order the shopper is amending.
+   * Writes then change that order, not a fresh trolley, so providers refuse
+   * them unless the caller opted in with allowOrderAmend(true).
+   */
+  amend?: OrderAmend;
+}
+
+export interface OrderAmend {
+  order_id: string;
+  order_no?: string;
+  /** ISO time the amend window closes, when the provider says. */
+  expires_at?: string;
 }
 
 export interface DeliverySlot {
@@ -172,6 +187,12 @@ export interface GroceryProvider {
   updateBasketItem?(itemId: string, quantity: number): Promise<void>;
   removeFromBasket?(itemId: string): Promise<void>;
   clearBasket?(): Promise<void>;
+  /**
+   * Opt in to basket writes that edit an upcoming order in amend mode.
+   * Off by default: a write that would silently change someone's next
+   * delivery throws OrderAmendError instead.
+   */
+  allowOrderAmend?(allow: boolean): void;
 
   // ── delivery & checkout ──────────────────────────────────────────────
   getDeliverySlots?(): Promise<DeliverySlot[]>;
@@ -191,4 +212,5 @@ export interface GroceryProvider {
  * `assertCapability()`, which is honest about the fact that most providers in
  * the world do not do checkout.
  */
-export type FullGroceryProvider = Required<GroceryProvider>;
+export type FullGroceryProvider = Required<Omit<GroceryProvider, 'allowOrderAmend'>> &
+  Pick<GroceryProvider, 'allowOrderAmend'>;
