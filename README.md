@@ -2,9 +2,9 @@
 
 # open&#8203;-supermarkets
 
-### The open-source grocery interface for humans and AI agents
+### One open interface to the world's supermarkets
 
-**Search live products and prices, compare retailers, build baskets and check out safely<br>across eleven providers in seven countries.**
+**Search live catalogues and prices, compare retailers, build baskets and automate grocery shopping<br>across 11 provider integrations in 7 countries, through CLI, HTTP and MCP.**
 
 **CLI · HTTP API · MCP · Agent Skills**
 
@@ -42,8 +42,9 @@ $ supermarket search melk --country NL
   Campina Halfvolle melk           €1.89 / 1,5 l
 ```
 
-**Spain, the Netherlands and Belgium need no credentials at all.** No key, no account,
-no signup. You can query a real supermarket catalogue immediately.
+**Open Supermarkets now spans the UK, Netherlands, Belgium, Spain, Hungary, the US and Canada.**
+Several catalogue providers need no account or retailer credentials at all, while authenticated
+providers progressively expose baskets, slots, orders and checkout.
 
 ---
 
@@ -75,10 +76,15 @@ npx playwright install chromium   # only for browser-auth providers
 
 ---
 
-## What it lets an agent do
+## What Open Supermarkets is
 
-A shopping agent should decide *what* makes sense for the person. Open Supermarkets
-handles the ugly retail plumbing underneath it:
+Open Supermarkets is a common, open-source interface over supermarket storefronts and APIs.
+It normalises the retailer-specific plumbing so applications and agents can work against one
+provider model instead of rebuilding Tesco, Sainsbury's, Ocado, Albert Heijn, Mercadona,
+AhorraMás, Kroger, Instacart and regional integrations independently.
+
+A shopping agent should still decide *what* makes sense for the person. Open Supermarkets
+handles the retail plumbing underneath it:
 
 - search real supermarket catalogues and current prices;
 - compare retailers without forcing every agent to build retailer integrations;
@@ -247,8 +253,9 @@ Never rely on it as medical or allergy advice. Check the product packaging.
 
 ## Bring your supermarket
 
-This project gets more useful when people add the supermarket they can actually test.
-A search-only provider can be one file plus one manifest entry.
+This project compounds in value as coverage grows. A contributor can add the supermarket
+they can actually test without implementing the entire shopping lifecycle: search-only
+providers are first-class, while basket, slots, checkout and orders are separate capabilities.
 
 **AhorraMás — Spain — search.** Search requires no credentials and reads the
 anonymous Salesforce Commerce Cloud storefront. Availability can depend on the
