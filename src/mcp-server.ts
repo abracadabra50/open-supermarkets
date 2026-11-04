@@ -33,7 +33,7 @@ const server = new Server(
   }
 );
 
-const PROVIDERS: ProviderName[] = ['sainsburys', 'ocado', 'tesco', 'tesco-hu'];
+const PROVIDERS: ProviderName[] = ['sainsburys', 'ocado', 'tesco', 'tesco-hu', 'migros'];
 
 // Session directories per provider
 const SESSION_PATHS: Record<ProviderName, string> = {
@@ -51,6 +51,8 @@ function isLoggedIn(provider: ProviderName): boolean {
 }
 
 function requireLogin(provider: ProviderName): string | null {
+  // Anonymous providers (Migros' guest basket) keep their own session; there is nothing to log in to.
+  if (getManifest(provider).auth === 'anonymous') return null;
   if (!isLoggedIn(provider)) {
     return `Not logged in to ${provider}. Use grocery_login with provider "${provider}" first.`;
   }
@@ -88,7 +90,7 @@ const amendProp = {
     'Leave false; if the tool says the basket is an order in amend mode, ask the user before retrying with true.',
 };
 
-const providerEnum = { type: 'string', enum: PROVIDERS, description: 'Supermarket provider: sainsburys, ocado, tesco, or tesco-hu (Hungary)' };
+const providerEnum = { type: 'string', enum: PROVIDERS, description: 'Supermarket provider: sainsburys, ocado, tesco, tesco-hu (Hungary), or migros (Switzerland, guest basket)' };
 const searchProviderEnum = { type: 'string', enum: [...PROVIDERS, 'lidl-ie'], description: 'Search provider, including Lidl Ireland (search only)' };
 
 server.setRequestHandler(ListToolsRequestSchema, async () => {

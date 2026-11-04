@@ -8,7 +8,7 @@ For contributor-facing provider requirements, see [PROVIDER-SPEC.md](./PROVIDER-
 
 ## Current coverage
 
-Current `main` includes 12 provider integrations across 8 countries:
+Current `main` includes 13 provider integrations across 9 countries:
 
 - United Kingdom: Sainsbury's, Tesco, Ocado
 - Ireland: Lidl Ireland
@@ -16,6 +16,7 @@ Current `main` includes 12 provider integrations across 8 countries:
 - Belgium: Albert Heijn België
 - Spain: Mercadona, AhorraMás
 - Hungary: Tesco Magyarország
+- Switzerland: Migros
 - United States: Kroger, Instacart, Instacart Web
 - Canada: Instacart, Instacart Web
 

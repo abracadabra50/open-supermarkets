@@ -1,13 +1,13 @@
 ---
 name: open-supermarkets
-description: "Open-source supermarket infrastructure across 12 provider integrations in 8 countries. Search live catalogues and prices, compare retailers, build baskets, inspect slots and orders, and preview checkout through CLI, HTTP, MCP or agent skills."
+description: "Open-source supermarket infrastructure across 13 provider integrations in 9 countries. Search live catalogues and prices, compare retailers, build baskets, inspect slots and orders, and preview checkout through CLI, HTTP, MCP or agent skills."
 license: MIT
 compatibility: Node.js 18+, TypeScript. Playwright only for browser-auth providers. Delivery areas and capabilities vary by retailer.
 metadata:
   author: zish
   version: "3.0.0"
   repository: https://github.com/abracadabra50/open-supermarkets
-  tags: [groceries, supermarket, grocery-api, price-comparison, tesco, sainsburys, ocado, tesco-hu, albert-heijn, mercadona, ahorramas, kroger, instacart, uk, netherlands, belgium, spain, hungary, usa, canada, shopping, automation, mcp, agent-tool]
+  tags: [groceries, supermarket, grocery-api, price-comparison, tesco, sainsburys, ocado, tesco-hu, migros, albert-heijn, mercadona, ahorramas, kroger, instacart, uk, netherlands, belgium, spain, hungary, switzerland, usa, canada, shopping, automation, mcp, agent-tool]
 allowed-tools: Bash({baseDir}/node:*), Bash(supermarket:*), Bash(npm:run:supermarket:*)
 ---
 
@@ -19,7 +19,7 @@ Use it when an agent needs live grocery search, retailer comparison, basket oper
 
 ## Current coverage
 
-Current `main` includes 12 provider integrations across 8 countries:
+Current `main` includes 13 provider integrations across 9 countries:
 
 | Provider | Market | Main capabilities |
 |---|---|---|
@@ -32,6 +32,7 @@ Current `main` includes 12 provider integrations across 8 countries:
 | Mercadona | Spain | search |
 | AhorraMás | Spain | search |
 | Tesco Magyarország | Hungary | search, basket |
+| Migros | Switzerland | search, guest basket |
 | Kroger | US | search |
 | Instacart | US, Canada | search, basket |
 | Instacart Web | US, Canada | search, basket |
@@ -157,6 +158,7 @@ Dedicated notes currently exist for:
 - [Tesco](skills/tesco.md)
 - [Ocado](skills/ocado.md)
 - [Tesco Magyarország](skills/tesco-hu.md)
+- [Migros](skills/migros.md)
 
 Providers without a dedicated skill file still work through the common provider interface where their declared capabilities are supported.
 
