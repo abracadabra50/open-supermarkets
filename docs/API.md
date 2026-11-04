@@ -73,7 +73,7 @@ const provider = await createProvider(manifest.id);
 const products = await provider.search('olive oil', { limit: 5 });
 ```
 
-The legacy synchronous `ProviderFactory` exists for backwards compatibility but should not be the basis for new integrations.
+`openProvider(id, { capability, extra? })` does the same after checking the manifest, so an unsupported operation throws before any provider code loads. The legacy synchronous `ProviderFactory` exists only for backwards compatibility. The CLI, HTTP API and MCP server no longer use it.
 
 ## Product
 
@@ -184,7 +184,7 @@ npx -y open-supermarkets mcp
 
 The MCP server exposes grocery search, comparison, batch search, basket operations, delivery slots, checkout, favourites and provider-specific tools where supported.
 
-Provider/capability routing is being migrated toward the registry as the single source of truth. See issue #30 for that architecture work.
+Provider routing comes from the registry. Each tool's `provider` enum lists exactly the providers whose manifest supports that tool. Unsupported operations and missing stored logins are refused before any provider code loads.
 
 ## Authentication models
 

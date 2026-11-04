@@ -19,9 +19,14 @@ Required semantics:
 - `tier`: `core` or `community`.
 - `maintainer`: required in practice for community integrations.
 - `credit`: protocol/documentation attribution where appropriate.
+- `session`: where a stored login lives, relative to the home directory (e.g. `.tesco-hu/session.json`). Omit it when auth comes from environment variables or there is none.
+- `searchNeedsSession`: `true` only if search itself needs that stored login. Defaults to false.
+- `extras`: provider-specific features beyond the shared capabilities: `login` (scripted email/password login), `favourites`, `categories`, `browse`, `regulars`, `staples`. Declare only the ones the class actually implements.
 - `load`: lazy dynamic import of the provider implementation.
 
-The registry is the source of truth. Do not maintain a second hand-written provider list in CLI, HTTP or MCP code when the information can be derived from the manifest.
+The registry is the source of truth. The CLI, HTTP API and MCP server route through `checkAccess()` / `openProvider()` in `src/providers/registry.ts`. Each surface keeps one table mapping its commands, routes or tools to a capability plus an optional extra (`src/mcp-routes.ts`, `ROUTES` in `src/http-server.ts`, and the `getProvider(..., need)` calls in `src/cli.ts`). Everything else is derived from the manifest: which providers each MCP tool's `provider` enum lists, the refusal of unsupported operations before provider code loads, and the MCP login gate.
+
+Adding a provider means one manifest entry and one implementation. `test/registry-routing.test.ts` fails if any surface keeps its own provider list, or accepts or refuses a provider the manifest says otherwise about.
 
 ## 2. Capabilities
 
@@ -140,7 +145,7 @@ Use the least powerful truthful auth model.
 - `credentials`: scriptable account login.
 - `session-cookie`: browser-derived session or equivalent.
 
-Do not require a stored login merely because another provider does. Routing should follow manifest metadata and capability requirements, not provider-name exception lists.
+Do not require a stored login merely because another provider does. The MCP server checks for the `session` file before any operation that needs an account: anything other than search, and search too when `searchNeedsSession` is set. The 401/403 hint follows `auth`: `session-cookie` providers are told to import a browser session, and the rest are told to log in.
 
 Never commit secrets or production session material.
 

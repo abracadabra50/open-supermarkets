@@ -2,8 +2,14 @@
 
 import http from 'node:http';
 import { URL } from 'node:url';
-import { ProviderFactory, ProviderName } from './providers';
-import { createProvider, supports } from './providers/registry';
+import {
+  MissingCapabilityError,
+  MissingExtraError,
+  UnknownProviderError,
+  checkAccess,
+  createProvider,
+  type Need,
+} from './providers/registry';
 import type { FullGroceryProvider, SearchOptions } from './providers/types';
 
 type FavouritesProvider = FullGroceryProvider & {
@@ -14,7 +20,7 @@ type FavouritesProvider = FullGroceryProvider & {
 // SUPERMARKET_* preferred; GROC_* still honoured for pre-3.0 setups.
 const host = process.env.SUPERMARKET_API_HOST || process.env.GROC_API_HOST || '127.0.0.1';
 const port = parsePort(process.env.SUPERMARKET_API_PORT || process.env.GROC_API_PORT || '7876');
-const defaultProvider = (process.env.SUPERMARKET_PROVIDER || process.env.GROC_PROVIDER || 'sainsburys') as ProviderName;
+const defaultProvider = process.env.SUPERMARKET_PROVIDER || process.env.GROC_PROVIDER || 'sainsburys';
 const apiToken = process.env.SUPERMARKET_API_TOKEN || process.env.GROC_API_TOKEN;
 
 function parsePort(value: string): number {
@@ -34,9 +40,36 @@ function parsePositiveInt(value: string | null, name: string, defaultValue: numb
   return parsed;
 }
 
-function getProvider(url: URL): FullGroceryProvider {
-  const providerName = (url.searchParams.get('provider') || defaultProvider) as ProviderName;
-  const provider = ProviderFactory.create(providerName);
+/** What each route needs from a provider; eligibility comes from the manifest. */
+export const ROUTES: Record<string, Need> = {
+  '/search': { capability: 'search' },
+  '/add': { capability: 'basket' },
+  '/remove': { capability: 'basket' },
+  '/update': { capability: 'basket' },
+  '/basket': { capability: 'basket' },
+  '/favourites': { capability: 'search', extra: 'favourites' },
+  '/favorites': { capability: 'search', extra: 'favourites' },
+  '/fav-search': { capability: 'search', extra: 'favourites' },
+  '/favorite-search': { capability: 'search', extra: 'favourites' },
+};
+
+/**
+ * Check the route against the manifest, then load the provider. Unknown ids
+ * are a 400 and unsupported operations a 501, both before any provider code
+ * loads. The login itself is left to the provider, as before.
+ */
+async function getProvider(url: URL, need: Need): Promise<FullGroceryProvider> {
+  const providerName = url.searchParams.get('provider') || defaultProvider;
+  try {
+    checkAccess(providerName, need);
+  } catch (err: any) {
+    if (err instanceof UnknownProviderError) throw Object.assign(err, { statusCode: 400 });
+    if (err instanceof MissingCapabilityError || err instanceof MissingExtraError) {
+      throw Object.assign(err, { statusCode: 501 });
+    }
+    throw err;
+  }
+  const provider = (await createProvider(providerName)) as FullGroceryProvider;
   // amend=1 opts in to writes that edit an upcoming order in amend mode (Tesco).
   provider.allowOrderAmend?.(['1', 'true'].includes(url.searchParams.get('amend') || ''));
   return provider;
@@ -89,27 +122,16 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
     });
   }
 
+  const need = ROUTES[url.pathname];
+  if (!need) return sendJson(res, 404, { error: 'Not found' });
+  const provider = await getProvider(url, need);
+
   if (url.pathname === '/search') {
     const q = requireQuery(url, 'q');
     const limit = parsePositiveInt(url.searchParams.get('limit'), 'limit', 24);
-    const provider = await createProvider(url.searchParams.get('provider') || defaultProvider);
     const products = await provider.search(q, { limit });
     return sendJson(res, 200, { products });
   }
-
-  // Unsupported operations must fail before the legacy factory is called.
-  const basketPaths = ['/add', '/remove', '/update', '/basket'];
-  const favouritePaths = ['/favourites', '/favorites', '/fav-search', '/favorite-search'];
-  if (!basketPaths.includes(url.pathname) && !favouritePaths.includes(url.pathname)) {
-    return sendJson(res, 404, { error: 'Not found' });
-  }
-  const providerId = url.searchParams.get('provider') || defaultProvider;
-  if ((basketPaths.includes(url.pathname) && !supports(providerId, 'basket')) ||
-      (favouritePaths.includes(url.pathname) &&
-       providerId !== 'sainsburys' && providerId !== 'ocado')) {
-    return sendJson(res, 501, { error: `Provider "${providerId}" does not support ${url.pathname}` });
-  }
-  const provider = getProvider(url);
 
   if (url.pathname === '/add') {
     const id = url.searchParams.get('id') || url.searchParams.get('q');

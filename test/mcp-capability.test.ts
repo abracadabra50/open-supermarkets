@@ -116,15 +116,20 @@ async function main() {
     let regularsCalls = 0;
     fs.existsSync = ((path: fs.PathLike) => String(path).endsWith('/.ocado/session.json') ||
       (!String(path).endsWith('/session.json') && checkedExists(path))) as typeof fs.existsSync;
-    ProviderFactory.create = ((name: string) => {
-      assert.equal(name, 'ocado');
-      return { getRegulars: async () => { regularsCalls++; return []; } };
-    }) as unknown as typeof ProviderFactory.create;
+    // Routing goes through the registry now, so the fake is a registry loader.
+    const ocadoManifest = getManifest('ocado');
+    const originalOcadoLoad = ocadoManifest.load;
+    ocadoManifest.load = async () => class {
+      readonly name = 'ocado';
+      async search() { return []; }
+      async getRegulars() { regularsCalls++; return []; }
+    } as any;
     const regulars = await client.callTool({ name: 'ocado_regulars', arguments: {} });
     assert.notEqual(regulars.isError, true, JSON.stringify(regulars.content));
     const regularsExtraProvider = await client.callTool({ name: 'ocado_regulars', arguments: { provider: 'lidl-ie' } });
     assert.notEqual(regularsExtraProvider.isError, true, JSON.stringify(regularsExtraProvider.content));
     assert.equal(regularsCalls, 2);
+    ocadoManifest.load = originalOcadoLoad;
     fs.existsSync = ((path: fs.PathLike) => String(path).endsWith('/.tesco/session.json') ||
       String(path).endsWith('/.tesco/staples.json') ||
       (!String(path).endsWith('/session.json') && checkedExists(path))) as typeof fs.existsSync;

@@ -16,6 +16,8 @@
  * still win — their messages are preserved untouched.
  */
 
+import { getManifest } from './providers/registry';
+
 export interface ExplainOptions {
   /** Provider id, so the suggested fix names the right one. */
   provider?: string;
@@ -59,6 +61,14 @@ export class OrderAmendError extends Error {
   }
 }
 
+function authModel(id: string): string | undefined {
+  try {
+    return getManifest(id).auth;
+  } catch {
+    return undefined; // unknown id: fall back to the generic login hint
+  }
+}
+
 export function explain(err: any, opts: ExplainOptions = {}): string {
   const raw: string = err?.message ?? String(err);
   const status = statusOf(err);
@@ -79,9 +89,10 @@ export function explain(err: any, opts: ExplainOptions = {}): string {
   if (alreadyExplained(raw)) return raw;
 
   if (status === 401 || status === 403) {
-    const SESSION_IMPORT_PROVIDERS = new Set(['tesco', 'tesco-hu', 'instacart-web']);
+    // The fix follows the provider's declared auth model: session-cookie
+    // providers import a browser session, the rest log in.
     const loginHint =
-      opts.provider && SESSION_IMPORT_PROVIDERS.has(opts.provider)
+      opts.provider && authModel(opts.provider) === 'session-cookie'
         ? `Import a browser session — see \`supermarket --provider ${opts.provider} import-session --help\`.`
         : `Log in with \`supermarket login --provider ${who}\`, or set SUPERMARKET_EMAIL and SUPERMARKET_PASSWORD.`;
     return (

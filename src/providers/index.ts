@@ -12,13 +12,13 @@ export * from './registry';
 export type ProviderName = string;
 
 /**
- * Legacy synchronous factory, kept so existing callers and the MCP server keep
- * working. It eagerly requires the UK providers.
+ * Legacy synchronous factory, kept only for code outside this repo that still
+ * calls it. The CLI, HTTP API and MCP server do not use it: they route through
+ * the registry (`checkAccess()` + `createProvider()`), so a new provider needs
+ * a manifest entry, not a case here. The parity test in lazy-loading.test.ts
+ * keeps this switch complete while it exists.
  *
- * Prefer `createProvider()` from the registry: it loads one provider on demand
- * instead of all of them, which is the whole point of the manifest.
- *
- * @deprecated use `createProvider()`
+ * @deprecated use `openProvider()` or `createProvider()` from the registry
  */
 export class ProviderFactory {
   static create(name: ProviderName): FullGroceryProvider {
