@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
+import { errors } from 'playwright';
 import { getManifest, createProvider } from '../src/providers/registry';
 import { normaliseWaitroseCard, WaitroseProvider } from '../src/providers/waitrose';
 
@@ -21,7 +22,7 @@ async function check(name: string, fn: () => void | Promise<void>) {
 }
 
 /** Build a browser double that executes the real product-card extractor callback. */
-function browserWithCards(cards: any[], body: string = '') {
+function browserWithCards(cards: any[], body: string = '', waitError?: Error) {
   let contextClosed = false;
   let browserClosed = false;
   let productSelectorUsed = false;
@@ -38,7 +39,7 @@ function browserWithCards(cards: any[], body: string = '') {
       if (selector.includes('/ecom/products/')) {
         productSelectorUsed = true;
         return {
-          first: () => ({ waitFor: async () => undefined }),
+          first: () => ({ waitFor: async () => { if (waitError) throw waitError; } }),
           evaluateAll: async (callback: (nodes: unknown[]) => unknown) => callback(anchors),
         };
       }
@@ -104,7 +105,7 @@ async function main() {
   });
 
   await check('only returns an empty list for an explicit no-results page', async () => {
-    const empty = browserWithCards([], "Sorry, we couldn't find any products");
+    const empty = browserWithCards([], "Sorry, we couldn't find any products", new errors.TimeoutError('no cards'));
     const provider = new WaitroseProvider(async () => empty.browser);
     assert.deepEqual(await provider.search('not-a-real-product'), []);
 
@@ -112,6 +113,13 @@ async function main() {
     const failingProvider = new WaitroseProvider(async () => unexpected.browser);
     await assert.rejects(() => failingProvider.search('milk'), /unexpected page without product cards/);
     assert.deepEqual(unexpected.closed(), { contextClosed: true, browserClosed: true });
+  });
+
+  await check('propagates non-timeout selector failures instead of hiding page errors', async () => {
+    const failing = browserWithCards([], '', new Error('Waitrose page crashed'));
+    const provider = new WaitroseProvider(async () => failing.browser);
+    await assert.rejects(() => provider.search('milk'), /Waitrose page crashed/);
+    assert.deepEqual(failing.closed(), { contextClosed: true, browserClosed: true });
   });
 
   await check('registry advertises anonymous search and lazy-loads Waitrose', async () => {

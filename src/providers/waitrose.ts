@@ -7,7 +7,7 @@
  * delivery address, stock is unknown rather than assumed available.
  */
 
-import { chromium } from 'playwright';
+import { chromium, errors } from 'playwright';
 import type { Browser, LaunchOptions, Page } from 'playwright';
 import type { GroceryProvider, Product, SearchOptions } from './types';
 
@@ -167,7 +167,10 @@ export class WaitroseProvider implements GroceryProvider {
           throw new WaitroseError(`Waitrose search failed${response ? ` (HTTP ${response.status()})` : ''}`);
         }
 
-        await page.locator('a[href*="/ecom/products/"]').first().waitFor({ timeout: SEARCH_TIMEOUT }).catch(() => undefined);
+        await page.locator('a[href*="/ecom/products/"]').first().waitFor({ timeout: SEARCH_TIMEOUT }).catch(error => {
+          if (error instanceof errors.TimeoutError) return undefined;
+          throw error;
+        });
         const cards = await cardsFromPage(page);
         const products = cards
           .map(normaliseWaitroseCard)
