@@ -4,6 +4,7 @@
  */
 import { WaitroseProvider } from '../src/providers/waitrose';
 
+/** Run one opt-in public-catalogue probe without changing any Waitrose state. */
 async function main() {
   const products = await new WaitroseProvider().search('milk', { limit: 3 });
   if (!products.length) throw new Error('Waitrose live search returned no products for "milk"');

@@ -135,6 +135,7 @@ export class WaitroseProvider implements GroceryProvider {
 
   constructor(private readonly launch: WaitroseBrowserLauncher = options => chromium.launch(options)) {}
 
+  /** Search the public catalogue in a fresh anonymous browser context. */
   async search(query: string, options: SearchOptions = {}): Promise<Product[]> {
     const term = query.trim();
     if (!term) throw new WaitroseError('Waitrose search query must not be empty');

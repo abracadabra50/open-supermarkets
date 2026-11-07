@@ -9,6 +9,7 @@ const fixture = JSON.parse(
 );
 
 let failures = 0;
+/** Run one isolated assertion and report a TAP-like result. */
 async function check(name: string, fn: () => void | Promise<void>) {
   try {
     await fn();
@@ -19,6 +20,7 @@ async function check(name: string, fn: () => void | Promise<void>) {
   }
 }
 
+/** Build a browser double that executes the real product-card extractor callback. */
 function browserWithCards(cards: any[], body: string = '') {
   let contextClosed = false;
   let browserClosed = false;
@@ -54,6 +56,7 @@ function browserWithCards(cards: any[], body: string = '') {
   };
 }
 
+/** Execute the offline Waitrose provider tests. */
 async function main() {
   console.log('waitrose provider');
 
