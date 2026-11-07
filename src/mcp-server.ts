@@ -92,15 +92,12 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       // ── Authentication ──
       {
         name: 'grocery_login',
-        description: 'Login to a supermarket account (sainsburys, ocado, tesco). Launches a browser for authentication. tesco-hu has no scripted login: import a browser session with the CLI instead.',
+        description: 'Explains how to log in locally. MCP never accepts account credentials; use the CLI so they stay out of tool calls and conversation history.',
         inputSchema: {
           type: 'object',
           properties: {
             provider: { ...providerEnum, default: 'sainsburys' },
-            email: { type: 'string', description: 'Account email address' },
-            password: { type: 'string', description: 'Account password' },
           },
-          required: ['email', 'password'],
         },
       },
       {
@@ -402,10 +399,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
     // ── grocery_login ──
     if (name === 'grocery_login') {
-      const { email, password } = args as { email: string; password: string };
-      const provider = await getProvider();
-      await provider.login(email, password);
-      return textResult(`Logged in to ${providerName} successfully. Session saved.`);
+      return textResult(
+        `For security, MCP does not accept account credentials. Run \`supermarket --provider ${providerName} login\` locally, then use \`grocery_status\` to confirm the saved session.`
+      );
     }
 
     // ── grocery_status ──

@@ -60,6 +60,14 @@ async function main() {
     require('../src/mcp-server');
     await connection;
     await client.connect(clientTransport);
+    const listed = await client.listTools();
+    const loginTool = listed.tools.find(tool => tool.name === 'grocery_login');
+    assert.ok(loginTool, 'grocery_login must be listed');
+    assert.deepEqual(Object.keys((loginTool.inputSchema as any).properties), ['provider']);
+    assert.doesNotMatch(JSON.stringify(loginTool), /password|email/i);
+    const login = await client.callTool({ name: 'grocery_login', arguments: { provider: 'sainsburys' } });
+    assert.notEqual(login.isError, true, JSON.stringify(login.content));
+    assert.match(JSON.stringify(login.content), /does not accept account credentials/);
     for (const name of ['grocery_login', 'grocery_favourites', 'grocery_favourites_search',
       'grocery_categories', 'grocery_browse', 'grocery_basket_view', 'grocery_basket_add',
       'grocery_basket_remove', 'grocery_basket_update', 'grocery_basket_clear', 'grocery_slots',
