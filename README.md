@@ -71,7 +71,7 @@ From source:
 ```bash
 git clone https://github.com/abracadabra50/open-supermarkets.git
 cd open-supermarkets && npm install && npm link
-npx playwright install chromium   # only for browser-auth providers
+npx playwright install chromium   # needed by every Playwright-backed provider, including anonymous Waitrose search
 ```
 
 ---
@@ -167,7 +167,7 @@ checkout needs an account, address and payment method, so it exists for fewer.
 | Tesco | 🇬🇧 | ✓ | ✓ | ✓ | ✓ | browser session |
 | Sainsbury's | 🇬🇧 | ✓ | ✓ | ✓ | ✓ | email + password |
 | Ocado | 🇬🇧 | ✓ | ✓ | read-only | — | email + password |
-| Waitrose | 🇬🇧 | ✓ | — | — | — | **none** (public catalogue; location-independent availability is unknown) |
+| Waitrose *(community; best-effort)* | 🇬🇧 | ✓ | — | — | — | **none** (public catalogue; location-independent availability is unknown) |
 | Lidl Ireland | 🇮🇪 | ✓ | — | — | — | **none** |
 | Albert Heijn | 🇳🇱 | ✓ | — | — | — | **none** |
 | Albert Heijn België | 🇧🇪 | ✓ | — | — | — | **none** |

@@ -85,6 +85,30 @@ async function main() {
     assert.equal(normaliseWaitroseCard({ name: 'Milk', text: 'Item price\n£1.00' }), undefined);
   });
 
+  await check('keeps a complete unit price when Waitrose omits its measure', () => {
+    const product = normaliseWaitroseCard({
+      id: '123',
+      name: 'Waitrose Milk',
+      text: 'Waitrose Milk\nItem price\n£1.20\nPrice per unit\n£1.06',
+    });
+    assert.deepEqual(product?.unit_price, { price: 1.06, measure: '' });
+  });
+
+  await check('extracts bounded sizes without reading the start of a word as litres', () => {
+    const largeLemon = normaliseWaitroseCard({
+      id: '456',
+      name: 'Waitrose 1 Large Lemon',
+      text: 'Waitrose 1 Large Lemon\nItem price\n40p',
+    });
+    const twoPack = normaliseWaitroseCard({
+      id: '789',
+      name: 'Waitrose 2s Apples',
+      text: 'Waitrose 2s Apples\nItem price\n£1.00',
+    });
+    assert.equal(largeLemon?.size, undefined);
+    assert.equal(twoPack?.size, '2s');
+  });
+
   await check('validates unsupported search arguments before launching a browser', async () => {
     let launched = false;
     const provider = new WaitroseProvider(async () => { launched = true; throw new Error('should not launch'); });

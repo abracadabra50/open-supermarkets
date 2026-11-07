@@ -70,10 +70,10 @@ export function normaliseWaitroseCard(card: WaitroseCard): Product | undefined {
   if (!id || !name || price === undefined || !Number.isFinite(price)) return undefined;
 
   const unitMatch = text.match(
-    /Price per unit\s*\n?\s*(£\s*\d+(?:\.\d+)?|\d+(?:\.\d+)?p)\s*(?:\/\s*)?([^\n]+)/i
+    /Price per unit\s*\n?\s*(£\s*\d+(?:\.\d+)?|\d+(?:\.\d+)?p)(?:(?:\s*\/\s*|\s+)([^\n]+))?/i
   );
   const unitPrice = unitMatch ? money(unitMatch[1]) : undefined;
-  const size = name.match(/(?:\d+(?:\.\d+)?\s*(?:kg|g|ml|litre|litres|l)|\d+\s*(?:pack|s)\b)/i)?.[0];
+  const size = name.match(/\b(?:\d+(?:\.\d+)?\s*(?:kg|g|ml|litres?|l)|\d+\s*(?:pack|s))\b/i)?.[0];
 
   return {
     product_uid: id,
@@ -81,7 +81,7 @@ export function normaliseWaitroseCard(card: WaitroseCard): Product | undefined {
     retail_price: { price },
     unit_price:
       unitPrice !== undefined
-        ? { price: unitPrice, measure: unitMatch?.[2].trim() ?? '' }
+        ? { price: unitPrice, measure: unitMatch?.[2]?.trim() ?? '' }
         : undefined,
     // Public pages are not associated with a delivery postcode.
     in_stock: null,
