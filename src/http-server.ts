@@ -100,19 +100,25 @@ function requireQuery(url: URL, name: string): string {
   return value;
 }
 
-function checkAuth(req: http.IncomingMessage): boolean {
-  if (!apiToken) return true;
+function checkAuth(req: http.IncomingMessage, required = false): boolean {
+  if (!apiToken) return !required;
   return req.headers.authorization === `Bearer ${apiToken}`;
 }
 
 async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
-  if (!checkAuth(req)) {
+  const url = new URL(req.url || '/', `http://${req.headers.host || `${host}:${port}`}`);
+  const mutation = ['/add', '/remove', '/update'].includes(url.pathname);
+
+  // An explicit bearer credential is required for writes, even on loopback.
+  // Browsers cannot attach it via navigations or cross-site HTML forms, and
+  // this server does not enable CORS for scripted cross-origin requests.
+  if (!checkAuth(req, mutation)) {
     return sendJson(res, 401, { error: 'Unauthorized' });
   }
 
-  const url = new URL(req.url || '/', `http://${req.headers.host || `${host}:${port}`}`);
-
-  if (req.method !== 'GET') {
+  const allowedMethod = mutation ? 'POST' : 'GET';
+  if (req.method !== allowedMethod) {
+    res.setHeader('Allow', allowedMethod);
     return sendJson(res, 405, { error: 'Method not allowed' });
   }
 
@@ -122,9 +128,9 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       provider: url.searchParams.get('provider') || defaultProvider,
       endpoints: [
         '/search?q=',
-        '/add?id=&qty=',
-        '/remove?id=',
-        '/update?id=&qty=',
+        'POST /add?id=&qty=',
+        'POST /remove?id=',
+        'POST /update?id=&qty=',
         '/basket',
         '/favourites',
         '/fav-search?q='
@@ -205,6 +211,6 @@ server.listen(port, host, () => {
   console.log(`open-supermarkets API listening on http://${host}:${port}`);
   console.log(`Provider: ${defaultProvider}`);
   if (!apiToken) {
-    console.log('No SUPERMARKET_API_TOKEN set; relying on localhost binding for access control.');
+    console.log('No SUPERMARKET_API_TOKEN set; basket mutations are disabled.');
   }
 });
