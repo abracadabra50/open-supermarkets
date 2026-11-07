@@ -739,6 +739,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   } catch (error: any) {
     // Agents act on error text, so a bare "status code 401" makes them retry
     // forever instead of telling the user to log in.
+    // Browser action logs may contain fill() values, including credentials.
+    // Never pass them to the formatter, which preserves long provider errors.
+    if (/(?:^|\n)Call log:/i.test(error?.message ?? String(error))) {
+      return textResult('Error: Browser operation failed. Check your session and log in again if needed.', true);
+    }
     return textResult(`Error: ${explain(error, { provider: providerName })}`, true);
   }
 });

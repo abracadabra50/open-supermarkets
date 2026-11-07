@@ -23,6 +23,16 @@ export interface LoginOptions {
 }
 
 export async function login(email: string, password: string, options: LoginOptions = {}): Promise<SessionData> {
+  try {
+    return await browserLogin(email, password, options);
+  } catch {
+    // Playwright exceptions can include credentials in fill() action logs.
+    // Do not retain the original error (including as a cause).
+    throw new Error('Sainsbury\'s authentication failed. Run `supermarket login --provider sainsburys` interactively to check credentials and complete any MFA.');
+  }
+}
+
+async function browserLogin(email: string, password: string, options: LoginOptions): Promise<SessionData> {
   const headless = options.headless ?? false;
   const log = headless ? console.error : console.log;
   log('🔐 Logging in to Sainsbury\'s...');
