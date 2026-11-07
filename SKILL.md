@@ -1,6 +1,6 @@
 ---
 name: open-supermarkets
-description: "Open-source supermarket infrastructure across 13 provider integrations in 9 countries. Search live catalogues and prices, compare retailers, build baskets, inspect slots and orders, and preview checkout through CLI, HTTP, MCP or agent skills."
+description: "Open-source supermarket infrastructure across 14 provider integrations in 9 countries. Search live catalogues and prices, compare retailers, build baskets, inspect slots and orders, and preview checkout through CLI, HTTP, MCP or agent skills."
 license: MIT
 compatibility: Node.js 18+, TypeScript. Playwright only for browser-auth providers. Delivery areas and capabilities vary by retailer.
 metadata:
@@ -19,7 +19,7 @@ Use it when an agent needs live grocery search, retailer comparison, basket oper
 
 ## Current coverage
 
-Current `main` includes 13 provider integrations across 9 countries:
+Current `main` includes 14 provider integrations across 9 countries:
 
 | Provider | Market | Main capabilities |
 |---|---|---|

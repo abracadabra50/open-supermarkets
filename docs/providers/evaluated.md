@@ -20,6 +20,7 @@ is a reason to re-probe, not a reason to stop.
 | ~~Lidl Ireland~~ | IE | **BUILT** | anonymous catalogue search, regular EUR prices; stock stays unknown without retailer evidence — see `src/providers/lidl-ie.ts` |
 | ~~Mercadona~~ | ES | **BUILT** | Algolia key found in the frontend bundle — see src/providers/mercadona.ts |
 | ~~Tesco Hungary~~ | HU | **BUILT** | same xapi as the UK, selected by `region: HU` — see src/providers/tesco-hu/ |
+| ~~Waitrose~~ | GB | **BUILT** | anonymous public catalogue search through a browser context; prices are public catalogue prices and availability remains unknown without a delivery location — see `src/providers/waitrose.ts` |
 | Tesco Czechia / Slovakia | CZ / SK | likely viable | same platform as Hungary; unverified, needs someone who can test |
 
 ---
