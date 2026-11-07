@@ -69,6 +69,17 @@ export const PROVIDERS: ProviderManifest[] = [
     maintainer: 'abracadabra50',
     load: async () => (await import('./tesco/index')).TescoProvider,
   },
+  {
+    id: 'waitrose',
+    label: 'Waitrose',
+    country: 'GB',
+    capabilities: ['search'],
+    auth: 'anonymous',
+    tier: 'community',
+    maintainer: 'abracadabra50',
+    credit: 'Waitrose public catalogue search, accessed through an anonymous browser context',
+    load: async () => (await import('./waitrose')).WaitroseProvider,
+  },
 
   // ── Ireland ──────────────────────────────────────────────────────────
   {

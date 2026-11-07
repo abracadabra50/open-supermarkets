@@ -4,7 +4,7 @@
 
 ### One open interface to the world's supermarkets
 
-**Search live catalogues and prices, compare retailers, build baskets and automate grocery shopping<br>across 13 provider integrations in 9 countries, through CLI, HTTP and MCP.**
+**Search live catalogues and prices, compare retailers, build baskets and automate grocery shopping<br>across 14 provider integrations in 9 countries, through CLI, HTTP and MCP.**
 
 **CLI · HTTP API · MCP · Agent Skills**
 
@@ -13,7 +13,7 @@
 [![npm](https://img.shields.io/npm/v/open-supermarkets?color=CB3837&logo=npm&logoColor=white)](https://www.npmjs.com/package/open-supermarkets)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 [![Countries](https://img.shields.io/badge/countries-9-2ea44f)](#what-works-where)
-[![Providers](https://img.shields.io/badge/providers-13-2ea44f)](#what-works-where)
+[![Providers](https://img.shields.io/badge/providers-14-2ea44f)](#what-works-where)
 [![No credentials](https://img.shields.io/badge/5%20countries-no%20credentials-orange)](#what-works-where)
 [![CI](https://github.com/abracadabra50/open-supermarkets/actions/workflows/ci.yml/badge.svg)](https://github.com/abracadabra50/open-supermarkets/actions/workflows/ci.yml)
 [![MCP](https://img.shields.io/badge/MCP-22%20tools-6E56CF)](#connect-an-agent)
@@ -71,7 +71,7 @@ From source:
 ```bash
 git clone https://github.com/abracadabra50/open-supermarkets.git
 cd open-supermarkets && npm install && npm link
-npx playwright install chromium   # only for browser-auth providers
+npx playwright install chromium   # needed by every Playwright-backed provider, including anonymous Waitrose search
 ```
 
 ---
@@ -167,6 +167,7 @@ checkout needs an account, address and payment method, so it exists for fewer.
 | Tesco | 🇬🇧 | ✓ | ✓ | ✓ | ✓ | browser session |
 | Sainsbury's | 🇬🇧 | ✓ | ✓ | ✓ | ✓ | email + password |
 | Ocado | 🇬🇧 | ✓ | ✓ | read-only | — | email + password |
+| Waitrose *(community; best-effort)* | 🇬🇧 | ✓ | — | — | — | **none** (public catalogue; location-independent availability is unknown) |
 | Lidl Ireland | 🇮🇪 | ✓ | — | — | — | **none** |
 | Albert Heijn | 🇳🇱 | ✓ | — | — | — | **none** |
 | Albert Heijn België | 🇧🇪 | ✓ | — | — | — | **none** |

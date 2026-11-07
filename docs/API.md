@@ -8,9 +8,9 @@ For contributor-facing provider requirements, see [PROVIDER-SPEC.md](./PROVIDER-
 
 ## Current coverage
 
-Current `main` includes 13 provider integrations across 9 countries:
+Current `main` includes 14 provider integrations across 9 countries:
 
-- United Kingdom: Sainsbury's, Tesco, Ocado
+- United Kingdom: Sainsbury's, Tesco, Ocado, Waitrose
 - Ireland: Lidl Ireland
 - Netherlands: Albert Heijn
 - Belgium: Albert Heijn België

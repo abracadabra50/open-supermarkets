@@ -24,6 +24,7 @@
     "prepublishOnly": "npm run build",
     "test": "node scripts/run-tests.js",
     "test:ahorramas:live": "tsx scripts/ahorramas-live.ts",
+    "test:waitrose:live": "tsx scripts/waitrose-live.ts",
     "typecheck": "tsc --noEmit"
   },
   "keywords": [
