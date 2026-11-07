@@ -23,6 +23,16 @@ const port = parsePort(process.env.SUPERMARKET_API_PORT || process.env.GROC_API_
 const defaultProvider = process.env.SUPERMARKET_PROVIDER || process.env.GROC_PROVIDER || 'sainsburys';
 const apiToken = process.env.SUPERMARKET_API_TOKEN || process.env.GROC_API_TOKEN;
 
+function isLoopbackHost(value: string): boolean {
+  return ['127.0.0.1', '::1', 'localhost'].includes(value.trim().toLowerCase());
+}
+
+// Binding beyond the local machine turns this convenience API into a network
+// service. Refuse that configuration unless callers must authenticate.
+if (!isLoopbackHost(host) && !apiToken) {
+  throw new Error('SUPERMARKET_API_TOKEN is required when SUPERMARKET_API_HOST is not a loopback address.');
+}
+
 function parsePort(value: string): number {
   const parsed = Number(value);
   if (!Number.isInteger(parsed) || parsed < 1 || parsed > 65535) {
@@ -196,8 +206,5 @@ server.listen(port, host, () => {
   console.log(`Provider: ${defaultProvider}`);
   if (!apiToken) {
     console.log('No SUPERMARKET_API_TOKEN set; relying on localhost binding for access control.');
-  }
-  if (host !== '127.0.0.1' && host !== 'localhost' && !apiToken) {
-    console.warn('WARNING: API is not bound to localhost and has no token. Set SUPERMARKET_API_TOKEN.');
   }
 });
