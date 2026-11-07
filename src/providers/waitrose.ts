@@ -94,7 +94,7 @@ export function normaliseWaitroseCard(card: WaitroseCard): Product | undefined {
 
 /** Extract product-card fields from the public search page without persisting browser state. */
 async function cardsFromPage(page: Page): Promise<WaitroseCard[]> {
-  return page.locator('a[href*="/ecom/products/"]').evaluateAll((anchors: any[]) => {
+  return page.locator('a[data-origincomponent="ProductPod"][href*="/ecom/products/"]').evaluateAll((anchors: any[]) => {
     const cards: Array<{
       id?: string;
       href?: string;
@@ -116,7 +116,7 @@ async function cardsFromPage(page: Page): Promise<WaitroseCard[]> {
       const image: any = root.querySelector('img');
       cards.push({
         href,
-        name: anchor.getAttribute('aria-label') || undefined,
+        name: anchor.querySelector('[data-testid="product-pod-name"]')?.textContent?.trim() || anchor.getAttribute('aria-label') || undefined,
         text: root.innerText,
         imageUrl: image?.currentSrc || image?.src || undefined,
       });
@@ -152,7 +152,9 @@ export class WaitroseProvider implements GroceryProvider {
 
     let browser: Browser | undefined;
     try {
-      browser = await this.launch({ headless: true });
+      // Waitrose resets headless Chromium's HTTP/2 connection before a response;
+      // the same Playwright Chromium succeeds when launched visibly.
+      browser = await this.launch({ headless: false });
       const context = await browser.newContext();
       try {
         const page = await context.newPage();
@@ -167,7 +169,7 @@ export class WaitroseProvider implements GroceryProvider {
           throw new WaitroseError(`Waitrose search failed${response ? ` (HTTP ${response.status()})` : ''}`);
         }
 
-        await page.locator('a[href*="/ecom/products/"]').first().waitFor({ timeout: SEARCH_TIMEOUT }).catch(error => {
+        await page.locator('a[data-origincomponent="ProductPod"][href*="/ecom/products/"]').first().waitFor({ timeout: SEARCH_TIMEOUT }).catch(error => {
           if (error instanceof errors.TimeoutError) return undefined;
           throw error;
         });

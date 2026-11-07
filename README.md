@@ -71,7 +71,7 @@ From source:
 ```bash
 git clone https://github.com/abracadabra50/open-supermarkets.git
 cd open-supermarkets && npm install && npm link
-npx playwright install chromium   # needed by every Playwright-backed provider, including anonymous Waitrose search
+npx playwright install chromium   # needed by every Playwright-backed provider, including anonymous Waitrose search (which runs visibly)
 ```
 
 ---
@@ -181,6 +181,9 @@ checkout needs an account, address and payment method, so it exists for fewer.
 
 `supermarket providers` prints this live from the registry. The manifest is the source
 of truth rather than a hand-maintained marketing claim.
+
+Waitrose's public catalogue rejects headless Chromium connections, so its anonymous
+search briefly launches Chromium visibly and closes it when the search completes.
 
 Lidl Ireland is search-only. Lidl Plus loyalty prices and conditional multibuy prices are
 not substituted for the regular shelf price. Product availability uses three states:

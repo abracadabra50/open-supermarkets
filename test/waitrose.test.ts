@@ -26,6 +26,7 @@ function browserWithCards(cards: any[], body: string = '', waitError?: Error) {
   let contextClosed = false;
   let browserClosed = false;
   let productSelectorUsed = false;
+  let launchOptions: unknown;
   const anchors = cards.map(card => ({
     href: card.href,
     innerText: card.text,
@@ -37,7 +38,7 @@ function browserWithCards(cards: any[], body: string = '', waitError?: Error) {
     goto: async () => ({ status: () => 200 }),
     locator: (selector: string) => {
       if (selector.includes('/ecom/products/')) {
-        productSelectorUsed = true;
+        productSelectorUsed = selector === 'a[data-origincomponent="ProductPod"][href*="/ecom/products/"]';
         return {
           first: () => ({ waitFor: async () => { if (waitError) throw waitError; } }),
           evaluateAll: async (callback: (nodes: unknown[]) => unknown) => callback(anchors),
@@ -52,8 +53,13 @@ function browserWithCards(cards: any[], body: string = '', waitError?: Error) {
   };
   return {
     browser,
+    launch: async (options: unknown) => {
+      launchOptions = options;
+      return browser;
+    },
     closed: () => ({ contextClosed, browserClosed }),
     usedProductSelector: () => productSelectorUsed,
+    launchOptions: () => launchOptions,
   };
 }
 
@@ -121,9 +127,10 @@ async function main() {
 
   await check('extracts public cards through the product selector and cleans browser resources', async () => {
     const fake = browserWithCards(fixture);
-    const provider = new WaitroseProvider(async () => fake.browser);
+    const provider = new WaitroseProvider(fake.launch);
     const products = await provider.search('milk', { limit: 1 });
     assert.deepEqual(products, [normaliseWaitroseCard(fixture[0])]);
+    assert.deepEqual(fake.launchOptions(), { headless: false });
     assert.equal(fake.usedProductSelector(), true);
     assert.deepEqual(fake.closed(), { contextClosed: true, browserClosed: true });
   });

@@ -2,7 +2,7 @@
 name: open-supermarkets
 description: "Open-source supermarket infrastructure across 14 provider integrations in 9 countries. Search live catalogues and prices, compare retailers, build baskets, inspect slots and orders, and preview checkout through CLI, HTTP, MCP or agent skills."
 license: MIT
-compatibility: Node.js 18+, TypeScript. Browser-backed providers require Playwright and Chromium, including anonymous Waitrose search. Delivery areas and capabilities vary by retailer.
+compatibility: Node.js 18+, TypeScript. Browser-backed providers require Playwright and Chromium, including anonymous Waitrose search, which launches Chromium visibly. Delivery areas and capabilities vary by retailer.
 metadata:
   author: zish
   version: "3.0.0"
