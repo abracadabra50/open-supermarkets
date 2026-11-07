@@ -36,6 +36,7 @@ export class WaitroseError extends Error {}
 
 export type WaitroseBrowserLauncher = (options: LaunchOptions) => Promise<Browser>;
 
+/** Convert Waitrose's public pound or pence labels to a numeric GBP amount. */
 function money(value: string): number | undefined {
   const trimmed = value.replace(/,/g, '').trim();
   const pence = trimmed.match(/^(\d+(?:\.\d+)?)p$/i);
@@ -45,12 +46,14 @@ function money(value: string): number | undefined {
   return undefined;
 }
 
+/** Prefer the explicit product id, otherwise recover the stable id from its product URL. */
 function productId(card: WaitroseCard): string | undefined {
   if (card.id?.trim()) return card.id.trim();
   const match = card.href?.match(/\/(\d+(?:-\d+)*)\/?(?:[?#].*)?$/);
   return match?.[1];
 }
 
+/** Return the first meaningful line of a product-card text block. */
 function firstLine(value: string | undefined): string | undefined {
   const line = value?.split(/\r?\n/).map(part => part.trim()).find(Boolean);
   return line || undefined;
@@ -89,6 +92,7 @@ export function normaliseWaitroseCard(card: WaitroseCard): Product | undefined {
   };
 }
 
+/** Extract product-card fields from the public search page without persisting browser state. */
 async function cardsFromPage(page: Page): Promise<WaitroseCard[]> {
   return page.locator('a[href*="/ecom/products/"]').evaluateAll((anchors: any[]) => {
     const cards: Array<{
@@ -121,6 +125,7 @@ async function cardsFromPage(page: Page): Promise<WaitroseCard[]> {
   });
 }
 
+/** Identify Waitrose's explicit empty-search messages without masking malformed pages. */
 function isNoResults(text: string): boolean {
   return /(?:no results|couldn't find|cannot find|no products found)/i.test(text);
 }

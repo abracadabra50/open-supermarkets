@@ -19,16 +19,25 @@ async function check(name: string, fn: () => void | Promise<void>) {
   }
 }
 
-function browserWithCards(cards: unknown[], body: string = '') {
+function browserWithCards(cards: any[], body: string = '') {
   let contextClosed = false;
   let browserClosed = false;
+  let productSelectorUsed = false;
+  const anchors = cards.map(card => ({
+    href: card.href,
+    innerText: card.text,
+    parentElement: { tagName: 'BODY' },
+    getAttribute: (name: string) => name === 'aria-label' ? card.name : null,
+    querySelector: () => card.imageUrl ? { currentSrc: card.imageUrl } : null,
+  }));
   const page: any = {
     goto: async () => ({ status: () => 200 }),
     locator: (selector: string) => {
       if (selector.includes('/ecom/products/')) {
+        productSelectorUsed = true;
         return {
           first: () => ({ waitFor: async () => undefined }),
-          evaluateAll: async () => cards,
+          evaluateAll: async (callback: (nodes: unknown[]) => unknown) => callback(anchors),
         };
       }
       return { innerText: async () => body };
@@ -38,7 +47,11 @@ function browserWithCards(cards: unknown[], body: string = '') {
     newContext: async () => ({ newPage: async () => page, close: async () => { contextClosed = true; } }),
     close: async () => { browserClosed = true; },
   };
-  return { browser, closed: () => ({ contextClosed, browserClosed }) };
+  return {
+    browser,
+    closed: () => ({ contextClosed, browserClosed }),
+    usedProductSelector: () => productSelectorUsed,
+  };
 }
 
 async function main() {
@@ -78,11 +91,12 @@ async function main() {
     assert.equal(launched, false);
   });
 
-  await check('returns products up to the requested limit and cleans browser resources', async () => {
+  await check('extracts public cards through the product selector and cleans browser resources', async () => {
     const fake = browserWithCards(fixture);
     const provider = new WaitroseProvider(async () => fake.browser);
     const products = await provider.search('milk', { limit: 1 });
-    assert.equal(products.length, 1);
+    assert.deepEqual(products, [normaliseWaitroseCard(fixture[0])]);
+    assert.equal(fake.usedProductSelector(), true);
     assert.deepEqual(fake.closed(), { contextClosed: true, browserClosed: true });
   });
 

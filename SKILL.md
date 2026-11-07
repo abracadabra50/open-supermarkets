@@ -26,6 +26,7 @@ Current `main` includes 14 provider integrations across 9 countries:
 | Sainsbury's | UK | search, basket, slots, checkout, orders |
 | Tesco | UK | search, basket, slots, checkout, orders |
 | Ocado | UK | search, basket, read slots, orders |
+| Waitrose | UK | search |
 | Lidl Ireland | Ireland | search |
 | Albert Heijn | Netherlands | search |
 | Albert Heijn België | Belgium | search |
