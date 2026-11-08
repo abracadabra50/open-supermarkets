@@ -139,7 +139,15 @@ fi
 echo "📝 Creating configuration..."
 echo ""
 
-cat > "$CONFIG_FILE" << EOF
+# Keep credentials private from creation, then replace any old permissions/symlink.
+CONFIG_TEMP=$(umask 077; mktemp "$CONFIG_FILE.XXXXXX") || {
+  echo "❌ Could not create temporary configuration file" >&2
+  exit 1
+}
+trap 'rm -f -- "$CONFIG_TEMP"' EXIT
+trap 'exit 1' HUP INT TERM
+
+cat > "$CONFIG_TEMP" << EOF
 {
   "provider": "$PROVIDER",
   "email": "$EMAIL",
@@ -153,6 +161,9 @@ cat > "$CONFIG_FILE" << EOF
 }
 EOF
 
+mv -f -- "$CONFIG_TEMP" "$CONFIG_FILE"
+trap - EXIT HUP INT TERM
+
 echo "✅ Configuration saved to $CONFIG_FILE"
 echo ""
 
@@ -160,7 +171,8 @@ echo ""
 echo "🔐 Testing login..."
 echo ""
 
-if npx ts-node src/cli.ts --provider "$PROVIDER" login --email "$EMAIL" --password "$PASSWORD" 2>&1 | grep -q "Logged in"; then
+# Use the CLI's environment input so the password never appears in process arguments.
+if SUPERMARKET_PASSWORD="$PASSWORD" npx ts-node src/cli.ts --provider "$PROVIDER" login --email "$EMAIL" 2>&1 | grep -q "Logged in"; then
   echo "✅ Login successful!"
   echo ""
 else

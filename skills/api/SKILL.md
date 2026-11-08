@@ -11,7 +11,7 @@ Use this skill when the user asks about Sainsbury's groceries, favourites, searc
 The local API must already be running on port `7876`:
 
 ```bash
-GROC_API_PORT=7876 npm run api
+GROC_API_PORT=7876 SUPERMARKET_API_TOKEN="your-private-token" npm run api
 ```
 
 ## Commands
@@ -29,6 +29,12 @@ node skills/api/wrapper.js update <item-id> <qty>
 ```
 
 All commands return JSON from the local API.
+
+Basket changes require the same token in the wrapper environment:
+
+```bash
+SUPERMARKET_API_TOKEN="your-private-token" node skills/api/wrapper.js add <product-id> [qty]
+```
 
 ## Add-to-basket workflow
 

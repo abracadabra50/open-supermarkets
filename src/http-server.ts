@@ -18,10 +18,20 @@ type FavouritesProvider = FullGroceryProvider & {
 };
 
 // SUPERMARKET_* preferred; GROC_* still honoured for pre-3.0 setups.
-const host = process.env.SUPERMARKET_API_HOST || process.env.GROC_API_HOST || '127.0.0.1';
+const host = parseHost(process.env.SUPERMARKET_API_HOST || process.env.GROC_API_HOST || '127.0.0.1');
 const port = parsePort(process.env.SUPERMARKET_API_PORT || process.env.GROC_API_PORT || '7876');
 const defaultProvider = process.env.SUPERMARKET_PROVIDER || process.env.GROC_PROVIDER || 'sainsburys';
 const apiToken = process.env.SUPERMARKET_API_TOKEN || process.env.GROC_API_TOKEN;
+
+function parseHost(value: string): string {
+  // Resolve localhost ourselves so DNS/hosts configuration cannot expose HTTP.
+  if (value === 'localhost') return '127.0.0.1';
+  if (value === '127.0.0.1' || value === '::1') return value;
+  throw new Error(
+    'SUPERMARKET_API_HOST (or GROC_API_HOST) must be 127.0.0.1, ::1, or localhost. ' +
+    'For remote access, use a TLS proxy on the same host forwarding to loopback; see docs/API.md.'
+  );
+}
 
 function parsePort(value: string): number {
   const parsed = Number(value);
@@ -90,19 +100,25 @@ function requireQuery(url: URL, name: string): string {
   return value;
 }
 
-function checkAuth(req: http.IncomingMessage): boolean {
-  if (!apiToken) return true;
+function checkAuth(req: http.IncomingMessage, required = false): boolean {
+  if (!apiToken) return !required;
   return req.headers.authorization === `Bearer ${apiToken}`;
 }
 
 async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
-  if (!checkAuth(req)) {
+  const url = new URL(req.url || '/', `http://${req.headers.host || `${host}:${port}`}`);
+  const mutation = ['/add', '/remove', '/update'].includes(url.pathname);
+
+  // An explicit bearer credential is required for writes, even on loopback.
+  // Browsers cannot attach it via navigations or cross-site HTML forms, and
+  // this server does not enable CORS for scripted cross-origin requests.
+  if (!checkAuth(req, mutation)) {
     return sendJson(res, 401, { error: 'Unauthorized' });
   }
 
-  const url = new URL(req.url || '/', `http://${req.headers.host || `${host}:${port}`}`);
-
-  if (req.method !== 'GET') {
+  const allowedMethod = mutation ? 'POST' : 'GET';
+  if (req.method !== allowedMethod) {
+    res.setHeader('Allow', allowedMethod);
     return sendJson(res, 405, { error: 'Method not allowed' });
   }
 
@@ -112,9 +128,9 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       provider: url.searchParams.get('provider') || defaultProvider,
       endpoints: [
         '/search?q=',
-        '/add?id=&qty=',
-        '/remove?id=',
-        '/update?id=&qty=',
+        'POST /add?id=&qty=',
+        'POST /remove?id=',
+        'POST /update?id=&qty=',
         '/basket',
         '/favourites',
         '/fav-search?q='
@@ -195,9 +211,6 @@ server.listen(port, host, () => {
   console.log(`open-supermarkets API listening on http://${host}:${port}`);
   console.log(`Provider: ${defaultProvider}`);
   if (!apiToken) {
-    console.log('No SUPERMARKET_API_TOKEN set; relying on localhost binding for access control.');
-  }
-  if (host !== '127.0.0.1' && host !== 'localhost' && !apiToken) {
-    console.warn('WARNING: API is not bound to localhost and has no token. Set SUPERMARKET_API_TOKEN.');
+    console.log('No SUPERMARKET_API_TOKEN set; basket mutations are disabled.');
   }
 });

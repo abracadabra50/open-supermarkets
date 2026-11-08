@@ -319,7 +319,7 @@ export function loginHint(id: string): string {
     return `Import a browser session: \`supermarket --provider ${id} import-session --help\`.`;
   }
   if (m.extras?.includes('login')) {
-    return `Log in with \`supermarket --provider ${id} login\` (MCP: grocery_login with provider "${id}").`;
+    return `Log in locally with \`supermarket --provider ${id} login\`. MCP does not accept account credentials.`;
   }
   return 'Set its credentials in the environment; see `supermarket providers`.';
 }
