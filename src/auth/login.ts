@@ -22,10 +22,14 @@ export interface LoginOptions {
   headless?: boolean;
 }
 
+/** A known-safe login outcome that may be shown without browser diagnostics. */
+class LoginFlowError extends Error {}
+
 export async function login(email: string, password: string, options: LoginOptions = {}): Promise<SessionData> {
   try {
     return await browserLogin(email, password, options);
-  } catch {
+  } catch (error) {
+    if (error instanceof LoginFlowError) throw error;
     // Playwright exceptions can include credentials in fill() action logs.
     // Do not retain the original error (including as a cause).
     throw new Error('Sainsbury\'s authentication failed. Run `supermarket login --provider sainsburys` interactively to check credentials and complete any MFA.');
@@ -108,7 +112,7 @@ async function browserLogin(email: string, password: string, options: LoginOptio
     // Handle MFA if required
     if (currentUrl.includes('/mfa')) {
       if (headless) {
-        throw new Error('Sainsbury\'s asked for MFA — run `groc login` interactively to complete it.');
+        throw new LoginFlowError('Sainsbury\'s asked for MFA — run `groc login` interactively to complete it.');
       }
       log('🔐 MFA required - SMS code sent');
       log('📱 Check your phone for the 6-digit code');
@@ -127,7 +131,7 @@ async function browserLogin(email: string, password: string, options: LoginOptio
       });
       
       if (!mfaCode || mfaCode.length !== 6) {
-        throw new Error('Invalid MFA code - must be 6 digits');
+        throw new LoginFlowError('Invalid MFA code - must be 6 digits');
       }
       
       log('🔑 Submitting MFA code...');
@@ -155,10 +159,10 @@ async function browserLogin(email: string, password: string, options: LoginOptio
       log(`Final URL after MFA: ${finalUrl}`);
       
       if (finalUrl.includes('login') || finalUrl.includes('mfa')) {
-        throw new Error('MFA verification failed - check code and try again');
+        throw new LoginFlowError('MFA verification failed - check code and try again');
       }
     } else if (currentUrl.includes('login')) {
-      throw new Error('Login failed - still on login page');
+      throw new LoginFlowError('Login failed - still on login page');
     }
     
     log('✅ Login successful!');

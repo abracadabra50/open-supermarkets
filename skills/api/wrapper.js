@@ -6,13 +6,17 @@
 const API = 'http://127.0.0.1:7876';
 const [cmd, ...args] = process.argv.slice(2);
 
-async function call(path, params = {}) {
+async function call(path, params = {}, method = 'GET') {
   const url = new URL(path, API);
   for (const [key, value] of Object.entries(params)) {
     if (value !== undefined && value !== '') url.searchParams.set(key, String(value));
   }
 
-  const res = await fetch(url);
+  const token = process.env.SUPERMARKET_API_TOKEN || process.env.GROC_API_TOKEN;
+  const res = await fetch(url, {
+    method,
+    headers: token ? { authorization: `Bearer ${token}` } : {},
+  });
   const body = await res.text();
 
   if (!res.ok) {
@@ -42,15 +46,15 @@ switch (cmd) {
     break;
 
   case 'add':
-    await call('/add', { id: args[0], qty: args[1] || 1 });
+    await call('/add', { id: args[0], qty: args[1] || 1 }, 'POST');
     break;
 
   case 'remove':
-    await call('/remove', { id: args[0] });
+    await call('/remove', { id: args[0] }, 'POST');
     break;
 
   case 'update':
-    await call('/update', { id: args[0], qty: args[1] });
+    await call('/update', { id: args[0], qty: args[1] }, 'POST');
     break;
 
   default:

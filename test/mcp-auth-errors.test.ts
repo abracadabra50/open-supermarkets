@@ -22,12 +22,15 @@ async function main() {
   const originalPassword = process.env.SAINSBURYS_PASSWORD;
   let closed = 0;
   let fills = 0;
+  let failPasswordFill = true;
   const page = {
     goto: async () => {}, waitForTimeout: async () => {}, waitForSelector: async () => {},
     locator: () => ({ isVisible: async () => false }),
+    evaluate: async () => {}, click: async () => {},
+    url: () => 'https://www.sainsburys.co.uk/groceries',
     fill: async (_selector: string, value: string) => {
       fills++;
-      if (value === password) throw browserError;
+      if (failPasswordFill && value === password) throw browserError;
     },
   };
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
@@ -84,6 +87,13 @@ async function main() {
     await assert.rejects(login('synthetic@example.invalid', password, { headless: true }), (error: any) => {
       assert.match(error.message, /authentication failed/);
       assert.equal(error.cause, undefined);
+      assert.doesNotMatch(error.stack, /synthetic-credential|Call log|page.fill/);
+      return true;
+    });
+    failPasswordFill = false;
+    (page as any).url = () => 'https://www.sainsburys.co.uk/gol-ui/oauth/login';
+    await assert.rejects(login('synthetic@example.invalid', password, { headless: true }), (error: any) => {
+      assert.match(error.message, /Login failed - still on login page/);
       assert.doesNotMatch(error.stack, /synthetic-credential|Call log|page.fill/);
       return true;
     });
