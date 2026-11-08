@@ -21,9 +21,9 @@ async function main() {
     delete process.env.GROC_API_TOKEN;
     assert.throws(
       () => require(httpServerPath),
-      /SUPERMARKET_API_TOKEN is required when SUPERMARKET_API_HOST is not a loopback address/
+      /SUPERMARKET_API_HOST .* must be 127\.0\.0\.1, ::1, or localhost/
     );
-    console.log('  ✓ HTTP server refuses a public bind without an API token');
+    console.log('  ✓ HTTP server refuses every public bind');
   } finally {
     delete require.cache[httpServerPath];
     restoreEnv('SUPERMARKET_API_HOST', originalHost);
