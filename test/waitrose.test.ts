@@ -144,6 +144,10 @@ async function main() {
     const failingProvider = new WaitroseProvider(async () => unexpected.browser);
     await assert.rejects(() => failingProvider.search('milk'), /unexpected page without product cards/);
     assert.deepEqual(unexpected.closed(), { contextClosed: true, browserClosed: true });
+
+    const genericError = browserWithCards([], 'No products found because the page was blocked', new errors.TimeoutError('no cards'));
+    const genericErrorProvider = new WaitroseProvider(async () => genericError.browser);
+    await assert.rejects(() => genericErrorProvider.search('milk'), /unexpected page without product cards/);
   });
 
   await check('propagates non-timeout selector failures instead of hiding page errors', async () => {

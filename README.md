@@ -184,6 +184,8 @@ of truth rather than a hand-maintained marketing claim.
 
 Waitrose's public catalogue rejects headless Chromium connections, so its anonymous
 search briefly launches Chromium visibly and closes it when the search completes.
+On Linux, the process running the CLI, HTTP API or MCP server therefore needs a
+display server; use `xvfb-run` on a headless server.
 
 Lidl Ireland is search-only. Lidl Plus loyalty prices and conditional multibuy prices are
 not substituted for the regular shelf price. Product availability uses three states:

@@ -125,6 +125,10 @@ const products = await provider.search('milk', {
 
 Search semantics vary upstream, but the common contract requires providers to surface real upstream errors instead of returning an empty list for authentication failures, WAF blocks or malformed responses.
 
+Waitrose public search is limited to the first result page: it rejects a non-zero
+`offset` and `category` filtering until a stable public pagination and category
+interface is available.
+
 ## Basket
 
 Basket support is capability-gated.

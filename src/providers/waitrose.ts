@@ -127,7 +127,7 @@ async function cardsFromPage(page: Page): Promise<WaitroseCard[]> {
 
 /** Identify Waitrose's explicit empty-search messages without masking malformed pages. */
 function isNoResults(text: string): boolean {
-  return /(?:no results|couldn't find|cannot find|no products found)/i.test(text);
+  return /Sorry,\s*we couldn't find any products/i.test(text);
 }
 
 export class WaitroseProvider implements GroceryProvider {
