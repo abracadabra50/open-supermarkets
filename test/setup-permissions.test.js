@@ -35,7 +35,9 @@ for (const existing of [false, true]) {
     }
     const result = f.run(existing);
     assert.equal(result.status, 0, result.stderr);
-    assert.equal(fs.statSync(f.config).mode & 0o777, 0o600);
+    if (process.platform !== 'win32') {
+      assert.equal(fs.statSync(f.config).mode & 0o777, 0o600);
+    }
     assert.equal(JSON.parse(fs.readFileSync(f.config, 'utf8')).password, 'synthetic-password');
     assert.deepEqual(fs.readdirSync(f.home).sort(), ['.uk-grocery-config.json', 'bin']);
   });
@@ -49,7 +51,9 @@ test('setup replaces a config symlink without writing credentials to its target'
   assert.equal(f.run(true).status, 0);
   assert.equal(fs.lstatSync(f.config).isSymbolicLink(), false);
   assert.equal(fs.readFileSync(target, 'utf8'), 'untouched');
-  assert.equal(fs.statSync(f.config).mode & 0o777, 0o600);
+  if (process.platform !== 'win32') {
+    assert.equal(fs.statSync(f.config).mode & 0o777, 0o600);
+  }
 });
 
 test('failed replacement preserves the old config and removes temporary credentials', (t) => {
@@ -60,4 +64,13 @@ test('failed replacement preserves the old config and removes temporary credenti
   assert.notEqual(result.status, 0);
   assert.equal(fs.readFileSync(f.config, 'utf8'), 'old config');
   assert.deepEqual(fs.readdirSync(f.home).sort(), ['.uk-grocery-config.json', 'bin']);
+});
+
+test('temporary config creation fails before credentials are written', (t) => {
+  const f = fixture(t);
+  fs.writeFileSync(path.join(f.bin, 'mktemp'), '#!/bin/sh\nexit 1\n', { mode: 0o700 });
+  const result = f.run();
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /Could not create temporary configuration file/);
+  assert.deepEqual(fs.readdirSync(f.home).sort(), ['bin']);
 });

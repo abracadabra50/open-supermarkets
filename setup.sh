@@ -140,7 +140,10 @@ echo "📝 Creating configuration..."
 echo ""
 
 # Keep credentials private from creation, then replace any old permissions/symlink.
-CONFIG_TEMP=$(umask 077; mktemp "$CONFIG_FILE.XXXXXX")
+CONFIG_TEMP=$(umask 077; mktemp "$CONFIG_FILE.XXXXXX") || {
+  echo "❌ Could not create temporary configuration file" >&2
+  exit 1
+}
 trap 'rm -f -- "$CONFIG_TEMP"' EXIT
 trap 'exit 1' HUP INT TERM
 
