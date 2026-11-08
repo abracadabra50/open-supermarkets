@@ -139,7 +139,12 @@ fi
 echo "📝 Creating configuration..."
 echo ""
 
-cat > "$CONFIG_FILE" << EOF
+# Keep credentials private from creation, then replace any old permissions/symlink.
+CONFIG_TEMP=$(umask 077; mktemp "$CONFIG_FILE.XXXXXX")
+trap 'rm -f -- "$CONFIG_TEMP"' EXIT
+trap 'exit 1' HUP INT TERM
+
+cat > "$CONFIG_TEMP" << EOF
 {
   "provider": "$PROVIDER",
   "email": "$EMAIL",
@@ -152,6 +157,9 @@ cat > "$CONFIG_FILE" << EOF
   "created_at": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 }
 EOF
+
+mv -f -- "$CONFIG_TEMP" "$CONFIG_FILE"
+trap - EXIT HUP INT TERM
 
 echo "✅ Configuration saved to $CONFIG_FILE"
 echo ""
