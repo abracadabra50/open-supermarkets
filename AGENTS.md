@@ -58,7 +58,13 @@ The canonical command is `supermarket`; `open-supermarkets` is an npm-friendly a
 
 Use `supermarket-api` for agents that have network access but cannot execute local commands.
 
-Keep it loopback-only unless an API token is configured.
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:112ee12f180b87adc6b64101dcf751bd8557cd201534c77761c9e549441b32ee -->
+
+The HTTP listener is loopback-only. For remote access, use a TLS reverse proxy on the same host and configure an API token; see [docs/API.md](docs/API.md#http-api).
+
+<!-- /coderabbit-ai-generated:v1 -->
 
 ## Capabilities
 

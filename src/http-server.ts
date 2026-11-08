@@ -18,19 +18,19 @@ type FavouritesProvider = FullGroceryProvider & {
 };
 
 // SUPERMARKET_* preferred; GROC_* still honoured for pre-3.0 setups.
-const host = process.env.SUPERMARKET_API_HOST || process.env.GROC_API_HOST || '127.0.0.1';
+const host = parseHost(process.env.SUPERMARKET_API_HOST || process.env.GROC_API_HOST || '127.0.0.1');
 const port = parsePort(process.env.SUPERMARKET_API_PORT || process.env.GROC_API_PORT || '7876');
 const defaultProvider = process.env.SUPERMARKET_PROVIDER || process.env.GROC_PROVIDER || 'sainsburys';
 const apiToken = process.env.SUPERMARKET_API_TOKEN || process.env.GROC_API_TOKEN;
 
-function isLoopbackHost(value: string): boolean {
-  return ['127.0.0.1', '::1', 'localhost'].includes(value.trim().toLowerCase());
-}
-
-// Binding beyond the local machine turns this convenience API into a network
-// service. Refuse that configuration unless callers must authenticate.
-if (!isLoopbackHost(host) && !apiToken) {
-  throw new Error('SUPERMARKET_API_TOKEN is required when SUPERMARKET_API_HOST is not a loopback address.');
+function parseHost(value: string): string {
+  // Resolve localhost ourselves so DNS/hosts configuration cannot expose HTTP.
+  if (value === 'localhost') return '127.0.0.1';
+  if (value === '127.0.0.1' || value === '::1') return value;
+  throw new Error(
+    'SUPERMARKET_API_HOST (or GROC_API_HOST) must be 127.0.0.1, ::1, or localhost. ' +
+    'For remote access, use a TLS proxy on the same host forwarding to loopback; see docs/API.md.'
+  );
 }
 
 function parsePort(value: string): number {

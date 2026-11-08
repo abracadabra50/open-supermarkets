@@ -177,6 +177,17 @@ curl -X POST -H "Authorization: Bearer $SUPERMARKET_API_TOKEN" \
   'http://127.0.0.1:7876/add?provider=tesco&id=123&qty=1'
 ```
 
+The HTTP server accepts only loopback bindings: `127.0.0.1` (default), `::1`, or `localhost` (bound as `127.0.0.1`). Both `SUPERMARKET_API_HOST` and the legacy `GROC_API_HOST` follow this restriction. Other bindings fail at startup, even with a token.
+
+For remote access, configure a TLS reverse proxy on the same host:
+
+1. Run the API with `SUPERMARKET_API_HOST=127.0.0.1`, `SUPERMARKET_API_PORT=7876`, and a strong `SUPERMARKET_API_TOKEN`.
+2. Configure the proxy's HTTPS listener with a valid certificate for the public hostname, and forward requests to `http://127.0.0.1:7876`, preserving the `Authorization` header. Keep the backend in the same network namespace and reachable only through loopback; do not publish or forward its port externally.
+3. Expose only the proxy's HTTPS listener. Disable public plaintext HTTP access to the API, including redirects that would receive credentials before redirecting.
+4. Remote clients must use `https://` and send `Authorization: Bearer <token>`, with certificate verification enabled.
+
+The proxy encrypts the remote connection; the token controls API access. A token alone does not protect plaintext traffic.
+
 <!-- /coderabbit-ai-generated:v1 -->
 
 Core routes include search and provider-backed basket operations. The supported surface depends on the selected provider's capabilities.
