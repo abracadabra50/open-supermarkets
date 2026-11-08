@@ -160,7 +160,8 @@ echo ""
 echo "🔐 Testing login..."
 echo ""
 
-if npx ts-node src/cli.ts --provider "$PROVIDER" login --email "$EMAIL" --password "$PASSWORD" 2>&1 | grep -q "Logged in"; then
+# Use the CLI's environment input so the password never appears in process arguments.
+if SUPERMARKET_PASSWORD="$PASSWORD" npx ts-node src/cli.ts --provider "$PROVIDER" login --email "$EMAIL" 2>&1 | grep -q "Logged in"; then
   echo "✅ Login successful!"
   echo ""
 else
