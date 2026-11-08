@@ -1,0 +1,13 @@
+[
+  {
+    "href": "https://www.waitrose.com/ecom/products/essential-british-semi-skimmed-milk/123456-123457-123458",
+    "name": "Essential British Semi Skimmed Milk 2 Pints 1.136L",
+    "text": "Essential British Semi Skimmed Milk 2 Pints 1.136L\nItem price\n£1.20\nPrice per unit\n£1.06/litre",
+    "imageUrl": "https://images.example.test/milk.jpg"
+  },
+  {
+    "id": "987654",
+    "name": "Waitrose Loose Lemon",
+    "text": "Waitrose Loose Lemon\nItem price\n40p\nPrice per unit\n40p each"
+  }
+]

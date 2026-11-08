@@ -59,7 +59,7 @@ check('list() works with no provider loaded', () => {
 
 check('country filter excludes other countries', () => {
   const gb = registry.list({ country: 'GB' }).map((p: any) => p.id).sort();
-  assert.deepStrictEqual(gb, ['ocado', 'sainsburys', 'tesco']);
+  assert.deepStrictEqual(gb, ['ocado', 'sainsburys', 'tesco', 'waitrose']);
   const nl = registry.list({ country: 'NL' }).map((p: any) => p.id);
   assert.deepStrictEqual(nl, ['ah']);
   const hu = registry.list({ country: 'HU' }).map((p: any) => p.id);

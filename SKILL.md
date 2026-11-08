@@ -1,8 +1,8 @@
 ---
 name: open-supermarkets
-description: "Open-source supermarket infrastructure across 13 provider integrations in 9 countries. Search live catalogues and prices, compare retailers, build baskets, inspect slots and orders, and preview checkout through CLI, HTTP, MCP or agent skills."
+description: "Open-source supermarket infrastructure across 14 provider integrations in 9 countries. Search live catalogues and prices, compare retailers, build baskets, inspect slots and orders, and preview checkout through CLI, HTTP, MCP or agent skills."
 license: MIT
-compatibility: Node.js 18+, TypeScript. Playwright only for browser-auth providers. Delivery areas and capabilities vary by retailer.
+compatibility: Node.js 18+, TypeScript. Browser-backed providers require Playwright and Chromium, including anonymous Waitrose search, which launches Chromium visibly. Delivery areas and capabilities vary by retailer.
 metadata:
   author: zish
   version: "3.0.0"
@@ -19,13 +19,14 @@ Use it when an agent needs live grocery search, retailer comparison, basket oper
 
 ## Current coverage
 
-Current `main` includes 13 provider integrations across 9 countries:
+Current `main` includes 14 provider integrations across 9 countries:
 
 | Provider | Market | Main capabilities |
 |---|---|---|
 | Sainsbury's | UK | search, basket, slots, checkout, orders |
 | Tesco | UK | search, basket, slots, checkout, orders |
 | Ocado | UK | search, basket, read slots, orders |
+| Waitrose | UK | search; public catalogue prices without a delivery address are indicative, not final |
 | Lidl Ireland | Ireland | search |
 | Albert Heijn | Netherlands | search |
 | Albert Heijn België | Belgium | search |
