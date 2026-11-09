@@ -134,7 +134,8 @@ GET  /api/cart/v1/carts/active                    # Read trolley
 POST /api/cart/v1/carts/active/apply-quantity     # Write trolley (quantities are DELTAS)
 PUT  /api/webproductpagews/v6/products            # Batch product info by UUID
 POST /api/ecomslots/v2/slots                      # Delivery slots
-POST /graphql                                     # Order history (GetCompletedOrders)
+GET  /api/order/v6/orders                         # Order history list (first page)
+GET  /api/order/v6/orders/{orderId}               # Order detail + line items
 ```
 
 Writes need an `x-csrf-token` header scraped from any page's HTML — handled automatically, with one re-scrape on 403.
