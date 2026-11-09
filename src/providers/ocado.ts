@@ -52,37 +52,6 @@ const NOT_IMPLEMENTED_YET =
   '(capturing them requires performing a real booking). Everything else ' +
   'works: login, search, browse, favourites, basket, slots, orders.';
 
-/** Verbatim GraphQL query Ocado's SPA uses for order history. */
-const COMPLETED_ORDERS_QUERY = `query GetCompletedOrders($first: Int!, $after: String) {
-  completedOrders(first: $first, after: $after) {
-    retentionPeriod
-    pageInfo { endCursor hasNextPage __typename }
-    edges {
-      node {
-        orderId
-        status
-        region { retailerRegionId regionId __typename }
-        prices { total { currency amount __typename } __typename }
-        recurringOrderDefinition { name __typename }
-        slot {
-          __typename
-          ... on InternalOrderSlot {
-            start end type shippingGroupType
-            carrier { carrierId __typename }
-            externalLocker { externalLockerId __typename }
-            deliveryDestination { deliveryMethod name address { timeZone __typename } __typename }
-            __typename
-          }
-          ... on ImportedOrderSlot { start end name timeZone __typename }
-        }
-        __typename
-      }
-      __typename
-    }
-    __typename
-  }
-}`;
-
 interface OcadoSession {
   cookies: any[];
   savedAt: string;
@@ -614,37 +583,54 @@ export class OcadoProvider implements GroceryProvider {
     return out;
   }
 
+  // Ocado retired GraphQL completedOrders. List + detail are both REST v6.
   async getOrders(): Promise<Order[]> {
-    const res = await this.client.post(
-      '/graphql',
-      { operationName: 'GetCompletedOrders', query: COMPLETED_ORDERS_QUERY, variables: { first: 10 } },
-      { headers: { 'x-csrf-token': await this.getCsrfToken() } }
-    );
-    const edges = res.data?.data?.completedOrders?.edges ?? [];
-    // Enrich each order with line items from the v6 order detail endpoint
-    return Promise.all(edges.map(async ({ node }: any) => {
+    const res = await this.client.get('/api/order/v6/orders');
+    const entities = res.data?.entities?.order ?? {};
+    const ids: string[] = Array.isArray(res.data?.result)
+      ? res.data.result.map((id: any) => String(id))
+      : Object.keys(entities);
+
+    return Promise.all(ids.map(async (orderId) => {
+      const node = entities[orderId] ?? { orderId };
       let items: BasketItem[] = [];
+      let dates = node.dates;
+      let status = node.status ?? '';
+      let total =
+        num(node?.orderTotals?.totalPrice?.amount) ??
+        num(node?.orderTotals?.finalPrice?.amount) ??
+        0;
       try {
-        const detail = await this.client.get(`/api/order/v6/orders/${node.orderId}`);
-        const order = detail.data?.entities?.order?.[node.orderId];
-        items = (order?.groupedProducts?.products ?? []).map((p: any) => ({
-          item_id: p.productId,
-          product_uid: p.productId,
-          name: p.name,
-          quantity: p.quantity ?? 0,
-          unit_price: num(p?.prices?.unit?.amount) ?? 0,
-          total_price: num(p?.prices?.total?.amount) ?? 0,
-        }));
+        const detail = await this.client.get(`/api/order/v6/orders/${orderId}`);
+        const order = detail.data?.entities?.order?.[orderId];
+        if (order) {
+          dates = order.dates ?? dates;
+          status = order.status ?? status;
+          total =
+            num(order?.orderTotals?.totalPrice?.amount) ??
+            num(order?.orderTotals?.finalPrice?.amount) ??
+            total;
+          items = (order?.groupedProducts?.products ?? []).map((p: any) => ({
+            item_id: p.productId,
+            product_uid: p.productId,
+            name: p.name,
+            quantity: p.quantity ?? 0,
+            unit_price: num(p?.prices?.pricePerItem?.amount) ?? num(p?.prices?.offered?.amount) ?? 0,
+            total_price: num(p?.prices?.offered?.amount) ?? num(p?.prices?.retail?.amount) ?? 0,
+          }));
+        }
       } catch { /* detail fetch best-effort */ }
+      const start = dates?.deliveryStartDate ?? '';
+      const end = dates?.deliveryEndDate ?? '';
       return {
-        order_id: node.orderId,
-        status: node.status,
-        total: num(node?.prices?.total?.amount) ?? 0,
-        delivery_slot: node.slot ? {
-          slot_id: '',
-          start_time: node.slot.start ?? '',
-          end_time: node.slot.end ?? '',
-          date: (node.slot.start ?? '').slice(0, 10),
+        order_id: orderId,
+        status,
+        total,
+        delivery_slot: start || end ? {
+          slot_id: node.slotId ?? '',
+          start_time: start,
+          end_time: end,
+          date: String(start || end).slice(0, 10),
           price: 0,
           available: false,
         } : undefined,
