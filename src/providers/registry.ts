@@ -204,6 +204,17 @@ export const PROVIDERS: ProviderManifest[] = [
     credit: 'Protocol documented by github.com/kleinjm/instacart_api (Ruby, MIT)',
     load: async () => (await import('./instacart-web')).InstacartWebProvider,
   },
+  {
+    id: 'walmart',
+    label: 'Walmart (via Scavio)',
+    country: 'US',
+    capabilities: ['search'],
+    auth: 'api-key',
+    tier: 'community',
+    maintainer: 'scavio-ai',
+    credit: 'Scavio Walmart API (scavio.dev)',
+    load: async () => (await import('./walmart')).WalmartProvider,
+  },
 ];
 
 const byId = new Map(PROVIDERS.map((p) => [p.id, p]));

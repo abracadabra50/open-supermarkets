@@ -175,6 +175,7 @@ checkout needs an account, address and payment method, so it exists for fewer.
 | Kroger *+ Ralphs, Fred Meyer, King Soopers, Harris Teeter, QFC* | 🇺🇸 | ✓ | — | — | — | free API key |
 | Instacart | 🇺🇸 🇨🇦 | ✓ | ✓ | — | via link | partner key |
 | Instacart *(unofficial)* | 🇺🇸 🇨🇦 | ✓ | ✓ | — | — | browser session |
+| Walmart *(via Scavio)* | 🇺🇸 | ✓ | — | — | — | paid API key |
 | Tesco Magyarország | 🇭🇺 | ✓ | ✓ | — | — | browser session (basket only) |
 | Migros | 🇨🇭 | ✓ | ✓ | — | — | **none** (guest basket) |
 
@@ -185,6 +186,12 @@ Lidl Ireland is search-only. Lidl Plus loyalty prices and conditional multibuy p
 not substituted for the regular shelf price. Product availability uses three states:
 `in_stock: true` means available, `false` means explicitly unavailable, and `null` means
 the retailer provided no reliable stock signal. Batch search exposes the same states as `inStock`.
+
+Walmart answers plain clients with bot detection, so the Walmart provider searches through
+[Scavio](https://scavio.dev), a paid API (`SCAVIO_API_KEY`; 1 credit a search, 2 with a store).
+Set `WALMART_STORE_ID` and `WALMART_ZIP` together to price and stock against one store; without
+them Walmart uses its own default store. Only items Walmart sells itself are returned, not
+marketplace listings, and search returns one page (no `offset`).
 
 Ocado slot booking and checkout are blocked by AWS WAF. Reading slots works; committing
 to one does not. The manifest therefore does not claim those capabilities.
