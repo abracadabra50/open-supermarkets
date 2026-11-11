@@ -48,6 +48,8 @@ export class ProviderFactory {
         return new (require('./instacart').InstacartProvider)();
       case 'instacart-web':
         return new (require('./instacart-web').InstacartWebProvider)();
+      case 'walmart':
+        return new (require('./walmart').WalmartProvider)();
       default:
         // Reachable only if a manifest entry has no case here — which the
         // registry-parity test catches before it ships.

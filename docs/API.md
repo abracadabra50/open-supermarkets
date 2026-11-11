@@ -17,7 +17,7 @@ Current `main` includes 13 provider integrations across 9 countries:
 - Spain: Mercadona, AhorraMás
 - Hungary: Tesco Magyarország
 - Switzerland: Migros
-- United States: Kroger, Instacart, Instacart Web
+- United States: Kroger, Instacart, Instacart Web, Walmart (via Scavio)
 - Canada: Instacart, Instacart Web
 
 Some provider integrations cover multiple retail banners. For example, Kroger's API also serves banners including Ralphs, Fred Meyer, King Soopers, Harris Teeter and QFC.

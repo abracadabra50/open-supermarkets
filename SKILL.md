@@ -7,7 +7,7 @@ metadata:
   author: zish
   version: "3.0.0"
   repository: https://github.com/abracadabra50/open-supermarkets
-  tags: [groceries, supermarket, grocery-api, price-comparison, tesco, sainsburys, ocado, tesco-hu, migros, albert-heijn, mercadona, ahorramas, kroger, instacart, uk, netherlands, belgium, spain, hungary, switzerland, usa, canada, shopping, automation, mcp, agent-tool]
+  tags: [groceries, supermarket, grocery-api, price-comparison, tesco, sainsburys, ocado, tesco-hu, migros, albert-heijn, mercadona, ahorramas, kroger, instacart, walmart, uk, netherlands, belgium, spain, hungary, switzerland, usa, canada, shopping, automation, mcp, agent-tool]
 allowed-tools: Bash({baseDir}/node:*), Bash(supermarket:*), Bash(npm:run:supermarket:*)
 ---
 
@@ -36,6 +36,7 @@ Current `main` includes 13 provider integrations across 9 countries:
 | Kroger | US | search |
 | Instacart | US, Canada | search, basket |
 | Instacart Web | US, Canada | search, basket |
+| Walmart (via Scavio) | US | search |
 
 Run `supermarket providers` for the live registry-backed capability matrix.
 
