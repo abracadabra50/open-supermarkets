@@ -42,6 +42,8 @@ function parsePositiveInt(value: string | null, name: string, defaultValue: numb
 
 /** What each route needs from a provider; eligibility comes from the manifest. */
 export const ROUTES: Record<string, Need> = {
+  '/checkout-preview': { capability: 'basket', extra: 'checkout-preview' },
+  '/store': { capability: 'search', extra: 'store-context' },
   '/search': { capability: 'search' },
   '/add': { capability: 'basket' },
   '/remove': { capability: 'basket' },
@@ -111,6 +113,8 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       ok: true,
       provider: url.searchParams.get('provider') || defaultProvider,
       endpoints: [
+        '/store',
+        '/checkout-preview',
         '/search?q=',
         '/add?id=&qty=',
         '/remove?id=',
@@ -125,6 +129,11 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
   const need = ROUTES[url.pathname];
   if (!need) return sendJson(res, 404, { error: 'Not found' });
   const provider = await getProvider(url, need);
+  if (url.pathname === '/checkout-preview') return sendJson(res, 200, await provider.getCheckoutPreview!());
+
+  if (url.pathname === '/store') {
+    return sendJson(res, 200, { store: await provider.getStore!() });
+  }
 
   if (url.pathname === '/search') {
     const q = requireQuery(url, 'q');

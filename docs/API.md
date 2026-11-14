@@ -8,13 +8,14 @@ For contributor-facing provider requirements, see [PROVIDER-SPEC.md](./PROVIDER-
 
 ## Current coverage
 
-Current `main` includes 13 provider integrations across 9 countries:
+Current `main` includes 14 provider integrations across 10 countries:
 
 - United Kingdom: Sainsbury's, Tesco, Ocado
 - Ireland: Lidl Ireland
 - Netherlands: Albert Heijn
 - Belgium: Albert Heijn België
 - Spain: Mercadona, AhorraMás
+- Italy: Conad (SeleniumBase local catalogue, basket and structured shopping preview)
 - Hungary: Tesco Magyarország
 - Switzerland: Migros
 - United States: Kroger, Instacart, Instacart Web
@@ -39,6 +40,7 @@ interface GroceryProvider {
   search(query: string, options?: SearchOptions): Promise<Product[]>;
   getProduct?(productId: string): Promise<Product>;
   getCategories?(): Promise<unknown>;
+  getStore?(): Promise<StoreContext | null>;
 
   login?(email: string, password: string): Promise<void>;
   logout?(): Promise<void>;
@@ -101,6 +103,7 @@ interface Product {
   rating?: number;
   review_count?: number;
   size?: string;
+  store?: StoreContext;
 }
 ```
 
@@ -124,6 +127,30 @@ const products = await provider.search('milk', {
 ```
 
 Search semantics vary upstream, but the common contract requires providers to surface real upstream errors instead of returning an empty list for authentication failures, WAF blocks or malformed responses.
+
+## Store-scoped browser providers
+
+`Product.store` and `Basket.store` identify the verified local fulfilment context:
+`store_id`, `name`, public store `address`, `provider`, and
+`fulfilment: 'pickup' | 'delivery'`. Batch results preserve this field.
+
+Providers declaring `store-context` expose `getStore()` through `supermarket store`,
+`GET /store`, and `grocery_store`. Store discovery/selection is not implemented by
+this interface; Conad uses the store selected in its visible browser.
+
+The optional `browser-login` extra exposes `startBrowserLogin()` through
+`supermarket login --manual` and `grocery_browser_login`. The result reports
+`authenticated`, `interaction_required`, and the current store. Conad also exposes
+an atomic `getSessionStatus()` used by provider-specific status requests.
+
+The `checkout-preview` extra exposes `getCheckoutPreview()` through
+`supermarket checkout-preview`, `GET /checkout-preview`, and `grocery_checkout_preview`.
+Conad returns an incomplete shopping review with known/unknown charges and blockers.
+Its `generated_at` is the observation time, not a retailer price/slot reservation;
+`can_place_order` is always false. The provider does not declare `checkout`.
+
+See [Conad](providers/conad.md) for the optional Python runtime, browser/profile
+configuration, supported basket mutations and live verification limits.
 
 ## Basket
 

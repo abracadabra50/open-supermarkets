@@ -18,6 +18,9 @@ export type Route = { need: Need; fixed?: string };
 
 export const TOOL_ROUTES: Record<string, Route> = {
   grocery_login: { need: { capability: 'search', extra: 'login' } },
+  grocery_browser_login: { need: { capability: 'search', extra: 'browser-login' } },
+  grocery_checkout_preview: { need: { capability: 'basket', extra: 'checkout-preview' } },
+  grocery_store: { need: { capability: 'search', extra: 'store-context' } },
   grocery_search: { need: { capability: 'search' } },
   grocery_search_batch: { need: { capability: 'search' } },
   grocery_favourites: { need: { capability: 'search', extra: 'favourites' } },

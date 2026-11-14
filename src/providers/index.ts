@@ -38,6 +38,8 @@ export class ProviderFactory {
         return new (require('./mercadona').MercadonaProvider)();
       case 'ahorramas':
         return new (require('./ahorramas').AhorramasProvider)();
+      case 'conad':
+        return new (require('./conad').ConadProvider)();
       case 'tesco-hu':
         return new (require('./tesco-hu/index').TescoHuProvider)();
       case 'migros':

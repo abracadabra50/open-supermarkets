@@ -57,6 +57,18 @@ export interface Product {
    * nothing — never assume a default.
    */
   shelf_life_days?: number;
+  /** The verified fulfilment context for store-scoped catalogue prices. */
+  store?: StoreContext;
+}
+
+export type Fulfilment = 'pickup' | 'delivery';
+
+export interface StoreContext {
+  store_id: string;
+  name: string;
+  address: string;
+  provider: string;
+  fulfilment: Fulfilment;
 }
 
 export interface BasketItem {
@@ -67,6 +79,8 @@ export interface BasketItem {
   /** null when the retailer does not expose reliable line pricing. */
   unit_price: number | null;
   total_price: number | null;
+  /** Explicit availability when the retailer exposes a reliable line signal. */
+  in_stock?: boolean | null;
 }
 
 export interface Basket {
@@ -79,12 +93,36 @@ export interface Basket {
   currency?: string;
   /** Provider's id for this basket, when it has one. */
   basket_id?: string;
+  store?: StoreContext;
   /**
    * Set when the "basket" is really an upcoming order the shopper is amending.
    * Writes then change that order, not a fresh trolley, so providers refuse
    * them unless the caller opted in with allowOrderAmend(true).
    */
   amend?: OrderAmend;
+}
+
+export interface BrowserLoginStatus {
+  provider: string;
+  authenticated: boolean;
+  interaction_required: boolean;
+  store: StoreContext | null;
+}
+
+export interface CheckoutPreview {
+  provider: string;
+  currency: string;
+  store: StoreContext | null;
+  basket: Basket;
+  preview_id: string;
+  snapshot_hash: string;
+  generated_at: string;
+  totals: { basket: number | null; delivery: number | null; service: number | null; final: number | null };
+  current_cart_total?: number | null;
+  delivery_slot: DeliverySlot | null;
+  payment_ready: boolean | null;
+  blockers: string[];
+  can_place_order: false;
 }
 
 export interface OrderAmend {
@@ -146,6 +184,9 @@ export type AuthModel =
  * interface can refuse them before loading provider code.
  */
 export type Extra =
+  | 'store-context' // inspect the verified store attached to the browser session
+  | 'browser-login' // open/resume a persistent browser login without credentials
+  | 'checkout-preview' // structured review without placing an order
   | 'login'       // scripted email + password login (supermarket login)
   | 'favourites'  // the account's favourites list, and search within it
   | 'categories'  // category tree
@@ -206,11 +247,15 @@ export interface GroceryProvider {
   search(query: string, options?: SearchOptions): Promise<Product[]>;
   getProduct?(productId: string): Promise<Product>;
   getCategories?(): Promise<any>;
+  getStore?(): Promise<StoreContext | null>;
 
   // ── auth ─────────────────────────────────────────────────────────────
   login?(email: string, password: string): Promise<void>;
   logout?(): Promise<void>;
   isAuthenticated?(): Promise<boolean>;
+  startBrowserLogin?(): Promise<BrowserLoginStatus>;
+  getSessionStatus?(): Promise<BrowserLoginStatus>;
+  getCheckoutPreview?(): Promise<CheckoutPreview>;
 
   // ── basket ───────────────────────────────────────────────────────────
   getBasket?(): Promise<Basket>;
@@ -243,5 +288,6 @@ export interface GroceryProvider {
  * `assertCapability()`, which is honest about the fact that most providers in
  * the world do not do checkout.
  */
-export type FullGroceryProvider = Required<Omit<GroceryProvider, 'allowOrderAmend'>> &
-  Pick<GroceryProvider, 'allowOrderAmend'>;
+type OptionalProviderMethods = 'allowOrderAmend' | 'getStore' | 'startBrowserLogin' | 'getSessionStatus' | 'getCheckoutPreview';
+export type FullGroceryProvider = Required<Omit<GroceryProvider, OptionalProviderMethods>> &
+  Pick<GroceryProvider, OptionalProviderMethods>;

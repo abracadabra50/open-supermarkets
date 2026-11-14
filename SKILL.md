@@ -1,13 +1,13 @@
 ---
 name: open-supermarkets
-description: "Open-source supermarket infrastructure across 13 provider integrations in 9 countries. Search live catalogues and prices, compare retailers, build baskets, inspect slots and orders, and preview checkout through CLI, HTTP, MCP or agent skills."
+description: "Open-source supermarket infrastructure across 14 provider integrations in 10 countries. Search live catalogues and prices, compare retailers, build baskets, inspect slots and orders, and preview checkout through CLI, HTTP, MCP or agent skills."
 license: MIT
-compatibility: Node.js 18+, TypeScript. Playwright only for browser-auth providers. Delivery areas and capabilities vary by retailer.
+compatibility: Node.js 18+, TypeScript. Browser providers use Playwright or optional Python/SeleniumBase (Conad). Delivery areas and capabilities vary by retailer.
 metadata:
   author: zish
   version: "3.0.0"
   repository: https://github.com/abracadabra50/open-supermarkets
-  tags: [groceries, supermarket, grocery-api, price-comparison, tesco, sainsburys, ocado, tesco-hu, migros, albert-heijn, mercadona, ahorramas, kroger, instacart, uk, netherlands, belgium, spain, hungary, switzerland, usa, canada, shopping, automation, mcp, agent-tool]
+  tags: [groceries, supermarket, grocery-api, price-comparison, tesco, sainsburys, ocado, tesco-hu, migros, albert-heijn, mercadona, ahorramas, conad, italy, kroger, instacart, uk, netherlands, belgium, spain, hungary, switzerland, usa, canada, shopping, automation, mcp, agent-tool]
 allowed-tools: Bash({baseDir}/node:*), Bash(supermarket:*), Bash(npm:run:supermarket:*)
 ---
 
@@ -19,7 +19,7 @@ Use it when an agent needs live grocery search, retailer comparison, basket oper
 
 ## Current coverage
 
-Current `main` includes 13 provider integrations across 9 countries:
+Current `main` includes 14 provider integrations across 10 countries:
 
 | Provider | Market | Main capabilities |
 |---|---|---|
@@ -31,6 +31,7 @@ Current `main` includes 13 provider integrations across 9 countries:
 | Albert Heijn België | Belgium | search |
 | Mercadona | Spain | search |
 | AhorraMás | Spain | search |
+| Conad | Italy | local search, basket, structured preview, SeleniumBase login |
 | Tesco Magyarország | Hungary | search, basket |
 | Migros | Switzerland | search, guest basket |
 | Kroger | US | search |
@@ -59,6 +60,8 @@ supermarket providers
 # Search by country
 supermarket search "milk" --country NL --json
 supermarket search "leche" --country ES --json
+# Conad requires a selected local store (see skills/conad.md)
+supermarket search "latte" --country IT --json
 
 # Search a specific provider
 supermarket --provider tesco search "milk" --json
@@ -161,6 +164,7 @@ Dedicated notes currently exist for:
 - [Ocado](skills/ocado.md)
 - [Tesco Magyarország](skills/tesco-hu.md)
 - [Migros](skills/migros.md)
+- [Conad Italia](skills/conad.md)
 
 Providers without a dedicated skill file still work through the common provider interface where their declared capabilities are supported.
 

@@ -24,6 +24,8 @@
     "prepublishOnly": "npm run build",
     "test": "node scripts/run-tests.js",
     "test:ahorramas:live": "tsx scripts/ahorramas-live.ts",
+    "test:conad:live": "tsx scripts/conad-live.ts",
+    "conad:browser": "python3 runtime/conad/worker.py",
     "typecheck": "tsc --noEmit"
   },
   "keywords": [
@@ -45,6 +47,8 @@
     "instacart",
     "kroger",
     "mercadona",
+    "conad",
+    "italy",
     "open-food-facts",
     "uk",
     "netherlands",
@@ -77,6 +81,11 @@
     "skills",
     "SKILL.md",
     "README.md",
+    "runtime/conad/worker.py",
+    "runtime/conad/browser.py",
+    "runtime/conad/actions.py",
+    "runtime/conad/model.py",
+    "runtime/conad/requirements.txt",
     "LICENSE"
   ],
   "dependencies": {

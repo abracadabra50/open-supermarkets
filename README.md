@@ -4,7 +4,7 @@
 
 ### One open interface to the world's supermarkets
 
-**Search live catalogues and prices, compare retailers, build baskets and automate grocery shopping<br>across 13 provider integrations in 9 countries, through CLI, HTTP and MCP.**
+**Search live catalogues and prices, compare retailers, build baskets and automate grocery shopping<br>across 14 provider integrations in 10 countries, through CLI, HTTP and MCP.**
 
 **CLI · HTTP API · MCP · Agent Skills**
 
@@ -12,11 +12,11 @@
 
 [![npm](https://img.shields.io/npm/v/open-supermarkets?color=CB3837&logo=npm&logoColor=white)](https://www.npmjs.com/package/open-supermarkets)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
-[![Countries](https://img.shields.io/badge/countries-9-2ea44f)](#what-works-where)
-[![Providers](https://img.shields.io/badge/providers-13-2ea44f)](#what-works-where)
-[![No credentials](https://img.shields.io/badge/5%20countries-no%20credentials-orange)](#what-works-where)
+[![Countries](https://img.shields.io/badge/countries-10-2ea44f)](#what-works-where)
+[![Providers](https://img.shields.io/badge/providers-14-2ea44f)](#what-works-where)
+[![No credentials](https://img.shields.io/badge/6%20countries-no%20credentials-orange)](#what-works-where)
 [![CI](https://github.com/abracadabra50/open-supermarkets/actions/workflows/ci.yml/badge.svg)](https://github.com/abracadabra50/open-supermarkets/actions/workflows/ci.yml)
-[![MCP](https://img.shields.io/badge/MCP-22%20tools-6E56CF)](#connect-an-agent)
+[![MCP](https://img.shields.io/badge/MCP-25%20tools-6E56CF)](#connect-an-agent)
 [![Stars](https://img.shields.io/github/stars/abracadabra50/open-supermarkets?style=flat&color=yellow)](https://github.com/abracadabra50/open-supermarkets/stargazers)
 
 🇬🇧 &nbsp;🇮🇪 &nbsp;🇳🇱 &nbsp;🇧🇪 &nbsp;🇪🇸 &nbsp;🇭🇺 &nbsp;🇨🇭 &nbsp;🇺🇸 &nbsp;🇨🇦 &nbsp;&nbsp;·&nbsp;&nbsp; [**your country next?**](#bring-your-supermarket)
@@ -42,7 +42,7 @@ $ supermarket search melk --country NL
   Campina Halfvolle melk           €1.89 / 1,5 l
 ```
 
-**Open Supermarkets now spans the UK, Ireland, the Netherlands, Belgium, Spain, Hungary, the US and Canada.**
+**Open Supermarkets now spans the UK, Ireland, the Netherlands, Belgium, Spain, Italy, Hungary, Switzerland, the US and Canada.**
 Several catalogue providers need no account or retailer credentials at all, while authenticated
 providers progressively expose baskets, slots, orders and checkout.
 
@@ -122,14 +122,16 @@ A useful first prompt:
 
 > *Plan a week of high-protein dinners, no pork and no nuts. Price the shop at Tesco, show me the basket and do not place an order.*
 
-The server exposes 22 tools, including batch primitives designed to stop agents burning
+The server exposes 25 tools, including batch primitives designed to stop agents burning
 one tool call per ingredient:
 
 | MCP tool | Purpose |
 |---|---|
 | `grocery_search` · `grocery_compare` | Find and compare products |
 | **`grocery_search_batch`** · **`grocery_basket_add_batch`** | **Many at once — prefer these** |
+| `grocery_browser_login` · `grocery_store` | Human login and verified local store where supported |
 | `grocery_basket_*` | View, add, remove, update, clear |
+| `grocery_checkout_preview` | Structured shopping review and remaining blockers where supported |
 | `grocery_slots` · `grocery_book_slot` | Delivery slots |
 | `grocery_checkout` | Preview/place an order; `dry_run` defaults to **true** |
 | `grocery_favourites` · `ocado_regulars` · `tesco_staples` | Repeat-purchase lists |
@@ -172,6 +174,7 @@ checkout needs an account, address and payment method, so it exists for fewer.
 | Albert Heijn België | 🇧🇪 | ✓ | — | — | — | **none** |
 | Mercadona | 🇪🇸 | ✓ | — | — | — | **none** |
 | AhorraMás | 🇪🇸 | ✓ | — | — | — | **none** |
+| Conad | 🇮🇹 | ✓ (local store) | ✓ | — | — | SeleniumBase profile; account optional |
 | Kroger *+ Ralphs, Fred Meyer, King Soopers, Harris Teeter, QFC* | 🇺🇸 | ✓ | — | — | — | free API key |
 | Instacart | 🇺🇸 🇨🇦 | ✓ | ✓ | — | via link | partner key |
 | Instacart *(unofficial)* | 🇺🇸 🇨🇦 | ✓ | ✓ | — | — | browser session |
@@ -267,6 +270,12 @@ providers are first-class, while basket, slots, checkout and orders are separate
 **AhorraMás — Spain — search.** Search requires no credentials and reads the
 anonymous Salesforce Commerce Cloud storefront. Availability can depend on the
 selected location; basket operations are not supported yet.
+
+**Conad — Italy — local catalogue, basket and review.** Uses a verified local store in a persistent SeleniumBase browser profile. Search,
+basket operations and a structured shopping review work through CLI/HTTP/MCP.
+Requires optional Python/SeleniumBase and a visible Chrome browser; the Node-only
+Docker image does not include that setup. Human login is resumed in the same
+browser. The draft review cannot authorize payment; order placement is disabled. See [setup, agent login and verification limits](docs/providers/conad.md).
 
 Before starting, read [`docs/providers/evaluated.md`](docs/providers/evaluated.md). It
 records providers already investigated, what worked, what failed and when. That avoids

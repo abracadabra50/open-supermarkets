@@ -1,0 +1,5 @@
+[
+  {"code":"100001","nome":"Synthetic milk 1 L","basePrice":1.79,"netQuantity":1,"netQuantityUm":"LT","defaultImgSrc":"/assets/products/test.jpeg","promo":[{"finalPrice":0.99}]},
+  {"code":"100002","nome":"Synthetic pasta 500 g","basePrice":0,"netQuantity":500,"netQuantityUm":"GR"},
+  {"code":"437403-1_N","nome":"Synthetic local milk","basePrice":"2,49","ean":"8003170014312"}
+]

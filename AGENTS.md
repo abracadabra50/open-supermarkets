@@ -2,7 +2,7 @@
 
 Open Supermarkets gives agents one grocery interface across multiple retailers and countries instead of requiring retailer-specific integrations in every agent.
 
-Current `main` covers 12 provider integrations across the UK, Ireland, the Netherlands, Belgium, Spain, Hungary, the US and Canada.
+Current `main` covers 14 provider integrations across 10 countries: the UK, Ireland, the Netherlands, Belgium, Spain, Italy, Hungary, Switzerland, the US and Canada.
 
 ## What agents should use it for
 
@@ -71,6 +71,7 @@ Typical capabilities are:
 - slots
 - checkout
 - orders
+- stores (discover, select and inspect local fulfilment stores)
 
 A search-only provider is valid and useful. Agents must not assume every provider supports basket or checkout.
 
@@ -166,6 +167,7 @@ Provider-specific notes live in `skills/`, including:
 - Tesco
 - Ocado
 - Tesco Magyarország
+- Conad Italia (local store selection and optional account login)
 
 Additional providers can still be used through the common CLI/library even when they do not need a dedicated skill file.
 

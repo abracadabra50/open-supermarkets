@@ -1,0 +1,2 @@
+# Optional browser runtime for the Conad provider.
+seleniumbase==4.57.1
