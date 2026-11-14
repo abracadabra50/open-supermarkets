@@ -91,8 +91,18 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
     tools: (<any[]>[
       // ── Authentication ──
       {
+        name: 'grocery_browser_login',
+        description: 'Open or resume a persistent SeleniumBase browser for human login. Returns verified account/store state; credentials are not required in the tool arguments.',
+        inputSchema: { type: 'object', properties: { provider: providerEnum }, required: ['provider'] },
+      },
+      {
+        name: 'grocery_checkout_preview',
+        description: 'Read a structured shopping review: basket, store, known/unknown costs, blockers, observation time and snapshot hash. Does not place an order; can_place_order must be checked.',
+        inputSchema: { type: 'object', properties: { provider: providerEnum }, required: ['provider'] },
+      },
+      {
         name: 'grocery_login',
-        description: 'Login to a supermarket account (sainsburys, ocado, tesco). Launches a browser for authentication. tesco-hu has no scripted login: import a browser session with the CLI instead.',
+        description: 'Login to a supermarket account. Conad uses a persistent SeleniumBase browser; prefer grocery_browser_login for human authentication, then grocery_status to verify it.',
         inputSchema: {
           type: 'object',
           properties: {
@@ -104,9 +114,14 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         },
       },
       {
+        name: 'grocery_store',
+        description: 'Read and verify the local store configured for this provider.',
+        inputSchema: { type: 'object', properties: { provider: providerEnum }, required: ['provider'] },
+      },
+      {
         name: 'grocery_status',
-        description: 'Check which supermarket accounts are currently logged in.',
-        inputSchema: { type: 'object', properties: {} },
+        description: 'Check stored account statuses, or verify a specific provider live, including its local store.',
+        inputSchema: { type: 'object', properties: { provider: providerEnum } },
       },
 
       // ── Search ──
@@ -257,7 +272,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             provider: { ...providerEnum, default: 'sainsburys' },
             amend: amendProp,
             product_id: { type: 'string', description: 'Product ID from search results' },
-            quantity: { type: 'number', description: 'Quantity to add (default: 1)', default: 1 },
+            quantity: { type: 'number', description: 'Quantity to add (default: 1; Conad UI adapter: maximum 10 per call)', default: 1 },
           },
           required: ['product_id'],
         },
@@ -270,9 +285,10 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           properties: {
             provider: { ...providerEnum, default: 'sainsburys' },
             amend: amendProp,
-            product_id: { type: 'string', description: 'Product or item ID to remove' },
+            product_id: { type: 'string', description: 'Legacy product/item ID to remove' },
+            item_id: { type: 'string', description: 'Basket line ID from grocery_basket_view (required for Conad)' },
           },
-          required: ['product_id'],
+          anyOf: [{ required: ['item_id'] }, { required: ['product_id'] }],
         },
       },
       {
@@ -284,7 +300,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             provider: { ...providerEnum, default: 'sainsburys' },
             amend: amendProp,
             item_id: { type: 'string', description: 'Item ID in the basket' },
-            quantity: { type: 'number', description: 'New quantity' },
+            quantity: { type: 'number', description: 'Absolute quantity (Conad UI adapter: maximum change of 10 per call)' },
           },
           required: ['item_id', 'quantity'],
         },
@@ -401,6 +417,18 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     };
 
     // ── grocery_login ──
+    if (name === 'grocery_browser_login') {
+      const provider = await getProvider();
+      return textResult(JSON.stringify(await provider.startBrowserLogin!()));
+    }
+    if (name === 'grocery_checkout_preview') {
+      const provider = await getProvider();
+      return textResult(JSON.stringify(await provider.getCheckoutPreview!()));
+    }
+    if (name === 'grocery_store') {
+      const provider = await getProvider();
+      return textResult(JSON.stringify(await provider.getStore!()));
+    }
     if (name === 'grocery_login') {
       const { email, password } = args as { email: string; password: string };
       const provider = await getProvider();
@@ -410,6 +438,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
     // ── grocery_status ──
     if (name === 'grocery_status') {
+      if ((args as any).provider) {
+        checkAccess(providerName, { capability: 'search' });
+        const provider = await getProvider();
+        const state = provider.getSessionStatus ? await provider.getSessionStatus() : undefined;
+        const authenticated = state ? state.authenticated : provider.isAuthenticated ? await provider.isAuthenticated() : undefined;
+        const store = state ? state.store : provider.getStore ? await provider.getStore() : undefined;
+        return textResult(JSON.stringify({ provider: providerName, authenticated, store }));
+      }
       const statuses = PROVIDERS.map(p => `${p.id}: ${authStatus(p.id)}`);
       return textResult(`Authentication status:\n${statuses.join('\n')}`);
     }
@@ -477,7 +513,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const formatted = limited.map((p, i) => {
         const stock = stockLabel(p.in_stock);
         const unitPrice = p.unit_price ? ` (${p.unit_price.price}/${p.unit_price.measure})` : '';
-        return `${i + 1}. ${p.name}\n   ${money(p.retail_price.price, p.currency)}${unitPrice} | ${stock} | ID: ${p.product_uid}`;
+        const store = p.store ? ` | Store: ${p.store.store_id} (${p.store.fulfilment}), ${p.store.address}` : '';
+        return `${i + 1}. ${p.name}\n   ${money(p.retail_price.price, p.currency)}${unitPrice} | ${stock} | ID: ${p.product_uid}${store}`;
       }).join('\n\n');
 
       return textResult(
@@ -602,15 +639,15 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         : '';
 
       if (basket.items.length === 0) {
-        return textResult(`${amendNote}${providerName} basket is empty.`);
+        return textResult(`${amendNote}${providerName} basket is empty. Retailer total: ${money(basket.total_cost, basket.currency)}${basket.store ? ` | Store: ${basket.store.store_id} (${basket.store.fulfilment})` : ''}`);
       }
 
       const formatted = basket.items.map((item, i) =>
-        `${i + 1}. ${item.quantity}x ${item.name}\n   ${money(item.unit_price, basket.currency)} each = ${money(item.total_price, basket.currency)} | ID: ${item.product_uid}`
+        `${i + 1}. ${item.quantity}x ${item.name}\n   ${money(item.unit_price, basket.currency)} each = ${money(item.total_price, basket.currency)} | Row ID: ${item.item_id} | Product ID: ${item.product_uid}${item.in_stock !== undefined ? ` | ${stockLabel(item.in_stock)}` : ''}`
       ).join('\n\n');
 
       return textResult(
-        `${amendNote}${providerName.toUpperCase()} Basket - ${money(basket.total_cost, basket.currency)} (${basket.items.length} items):\n\n${formatted}`
+        `${amendNote}${providerName.toUpperCase()} Basket - ${money(basket.total_cost, basket.currency)} (${basket.items.length} items):\n${basket.store ? `Store: ${basket.store.store_id} (${basket.store.fulfilment}), ${basket.store.address}\n` : ''}\n${formatted}`
       );
     }
 
@@ -624,10 +661,15 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
     // ── grocery_basket_remove ──
     if (name === 'grocery_basket_remove') {
-      const { product_id } = args as { product_id: string };
+      const { product_id, item_id } = args as { product_id?: string; item_id?: string };
+      if (product_id !== undefined && item_id !== undefined && product_id !== item_id) {
+        throw new Error('Provide one basket removal ID; item_id and product_id must not conflict.');
+      }
+      const id = item_id ?? product_id;
+      if (typeof id !== 'string' || !id) throw new Error('A basket item_id or product_id is required.');
       const provider = await getProvider((args as any).amend === true);
-      await provider.removeFromBasket(product_id);
-      return textResult(`Removed product ${product_id} from ${providerName} basket.`);
+      await provider.removeFromBasket(id);
+      return textResult(`Removed item ${id} from ${providerName} basket.`);
     }
 
     // ── grocery_basket_update ──

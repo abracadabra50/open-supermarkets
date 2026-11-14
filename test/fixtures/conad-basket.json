@@ -1,0 +1,19 @@
+{
+  "empty_visible": false,
+  "ordinary_cart": true,
+  "amend": false,
+  "cart": {
+    "code": "synthetic-basket",
+    "currency": "EUR",
+    "entries": [{"entryNumber":0,"productCode":"100001","updatedEntry":false,"updatedQuantity":false}],
+    "total_quantity": 1,
+    "total": 7.69,
+    "subtotal": 1.79,
+    "delivery": 5.90,
+    "minimum_value_reached": false
+  },
+  "cards": [{
+    "max_quantity": "99",
+    "product": {"code":"100001","nome":"Synthetic milk 1 L","basePrice":1.79,"entries":[{"entryNumber":0,"qty":1,"totalPrice":{"currencyIso":"EUR","value":1.79}}]}
+  }]
+}

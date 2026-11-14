@@ -75,6 +75,7 @@ function printProducts(products: any[]) {
     console.log(`${i + 1}. ${p.name}${rating}`);
     console.log(`   ${money(p.retail_price.price, p.currency)}${size}${unit} ${stock}`);
     console.log(`   ID: ${p.product_uid}\n`);
+    if (p.store) console.log(`   Store: ${p.store.store_id} (${p.store.fulfilment}), ${p.store.address}\n`);
   });
 }
 
@@ -83,7 +84,8 @@ program
   .command('login')
   .description('Login to supermarket account')
   .option('-e, --email <email>', 'Email address (or set SUPERMARKET_EMAIL)')
-  .option('--password [password]', 'Password (or set SUPERMARKET_PASSWORD; omit to be prompted interactively)')
+  .option('--password [password]', 'Password (prefer setting SUPERMARKET_PASSWORD)')
+  .option('--manual', 'Open a browser for human login where supported')
   .action(async (options, cmd) => {
     try {
       // SUPERMARKET_* is preferred; GROC_* still works for pre-3.0 setups.
@@ -91,11 +93,16 @@ program
         options.email || process.env.SUPERMARKET_EMAIL || process.env.GROC_EMAIL;
       const password =
         options.password || process.env.SUPERMARKET_PASSWORD || process.env.GROC_PASSWORD;
-      if (!email || !password) {
-        console.error('❌ Email and password required. Use --email/--password or set SUPERMARKET_EMAIL/SUPERMARKET_PASSWORD.');
-        process.exit(1);
+      const provider = await getProvider(cmd.optsWithGlobals(), {
+        capability: 'search', extra: options.manual ? 'browser-login' : 'login',
+      });
+      if (options.manual) {
+        console.log(JSON.stringify(await provider.startBrowserLogin!(), null, 2));
+        return;
       }
-      const provider = await getProvider(cmd.optsWithGlobals(), { capability: 'search', extra: 'login' });
+      if (typeof email !== 'string' || !email.trim() || typeof password !== 'string' || !password) {
+        throw new Error('Email and password required. Set SUPERMARKET_EMAIL/SUPERMARKET_PASSWORD, or use --manual where supported.');
+      }
       await provider.login(email, password);
       console.log(`✅ Logged in to ${provider.name}`);
     } catch (error: any) {
@@ -134,12 +141,15 @@ program
           : providerName === 'tesco-hu'
             ? (await import('./providers/tesco-hu/session')).getSessionInfo()
             : undefined;
-      const authenticated = await provider.isAuthenticated();
+      const state = provider.getSessionStatus ? await provider.getSessionStatus() : undefined;
+      const authenticated = state ? state.authenticated : await provider.isAuthenticated();
+      const store = state ? state.store : provider.getStore ? await provider.getStore() : undefined;
 
       const result = {
         provider: provider.name,
         authenticated,
         session: sessionInfo,
+        ...(store !== undefined ? { store } : {}),
       };
 
       if (options.json) {
@@ -149,6 +159,7 @@ program
 
       console.log(`\n🔐 ${provider.name.toUpperCase()} Status\n`);
       console.log(`Authenticated: ${authenticated ? '✅ yes' : '❌ no'}`);
+      if (store) console.log(`Store: ${store.store_id} (${store.fulfilment}), ${store.address}`);
 
       if (sessionInfo) {
         console.log(`Session file: ${sessionInfo.exists ? sessionInfo.path : 'not found'}`);
@@ -471,6 +482,18 @@ program
   });
 
 // Basket
+program.command('checkout-preview')
+  .description('Read a structured shopping review and the remaining confirmation blockers')
+  .action(async (_options, cmd) => {
+    try {
+      const provider = await getProvider(cmd.optsWithGlobals(), { capability: 'basket', extra: 'checkout-preview' });
+      console.log(JSON.stringify(await provider.getCheckoutPreview!(), null, 2));
+    } catch (error: any) {
+      console.error(explain(error, { provider: cmd.optsWithGlobals().provider, action: 'checkout preview' }));
+      process.exitCode = 1;
+    }
+  });
+
 program
   .command('basket')
   .description('View basket')
@@ -864,6 +887,20 @@ program
     } catch (error: any) {
       console.error('❌ Session import failed:', explain(error, { provider: cmd?.optsWithGlobals?.().provider ?? program.opts().provider, action: 'session import' }));
       process.exit(1);
+    }
+  });
+
+// Verified fulfilment context for providers with store-scoped prices.
+program.command('store')
+  .description('Inspect the verified local store')
+  .option('--json', 'Output as JSON')
+  .action(async (_options, cmd) => {
+    try {
+      const provider = await getProvider(cmd.optsWithGlobals(), { capability: 'search', extra: 'store-context' });
+      console.log(JSON.stringify(await provider.getStore!(), null, 2));
+    } catch (error: any) {
+      console.error(explain(error, { provider: cmd.optsWithGlobals().provider, action: 'inspect store' }));
+      process.exitCode = 1;
     }
   });
 

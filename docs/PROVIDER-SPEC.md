@@ -21,7 +21,7 @@ Required semantics:
 - `credit`: protocol/documentation attribution where appropriate.
 - `session`: where a stored login lives, relative to the home directory (e.g. `.tesco-hu/session.json`). Omit it when auth comes from environment variables or there is none.
 - `searchNeedsSession`: `true` only if search itself needs that stored login. Defaults to false.
-- `extras`: provider-specific features beyond the shared capabilities: `login` (scripted email/password login), `favourites`, `categories`, `browse`, `regulars`, `staples`. Declare only the ones the class actually implements.
+- `extras`: provider-specific features beyond the shared capabilities: `login` (scripted email/password login), `favourites`, `categories`, `browse`, `regulars`, `staples`, `browser-login` (human browser onboarding), `store-context` (verified fulfilment context), `checkout-preview` (incomplete shopping review without placing an order). Declare only the ones the class actually implements.
 - `load`: lazy dynamic import of the provider implementation.
 
 The registry is the source of truth. The CLI, HTTP API and MCP server route through `checkAccess()` / `openProvider()` in `src/providers/registry.ts`. Each surface keeps one table mapping its commands, routes or tools to a capability plus an optional extra (`src/mcp-routes.ts`, `ROUTES` in `src/http-server.ts`, and the `getProvider(..., need)` calls in `src/cli.ts`). Everything else is derived from the manifest: which providers each MCP tool's `provider` enum lists, the refusal of unsupported operations before provider code loads, and the MCP login gate.
@@ -71,6 +71,9 @@ The same applies to basket lines: `unit_price`, `total_price` and `total_cost` a
 Loyalty/member pricing must not replace regular retail pricing unless the shared contract explicitly represents the distinction. If both are later supported, they need separate fields with explicit semantics.
 
 Store-scoped pricing must not be represented as national pricing. The provider must either require/select the appropriate store context or expose the limitation.
+
+`Product.store` carries the verified `StoreContext` for a local price (store ID,
+name, address, provider and fulfilment mode). Preserve this field in batch results.
 
 ### Availability
 
@@ -158,6 +161,7 @@ Requirements:
 - no hard-coded cookies or transient session headers;
 - deterministic cleanup of page, context and browser;
 - cleanup on both success and failure;
+- a deliberately persistent worker may keep its browser between operations, provided ownership is explicit, local IPC is protected, and worker shutdown/failure cleans up the browser;
 - explicit timeout bounds;
 - tests for cleanup paths;
 - clear errors for WAF/Cloudflare/bot blocking;

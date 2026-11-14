@@ -134,6 +134,22 @@ export const PROVIDERS: ProviderManifest[] = [
     load: async () => (await import('./ahorramas')).AhorramasProvider,
   },
 
+  // ── Italy ────────────────────────────────────────────────────────────
+  {
+    id: 'conad',
+    label: 'Conad',
+    country: 'IT',
+    capabilities: ['search', 'basket'],
+    // Local catalogue access works with a selected guest shop; account login
+    // is optional. The provider validates its live shop session itself.
+    auth: 'anonymous',
+    extras: ['login', 'browser-login', 'store-context', 'checkout-preview'],
+    tier: 'community',
+    maintainer: 'GianluDeveloper',
+    credit: 'Conad browser-only SeleniumBase UC/CDP flows; login, local catalogue and basket researched 2026-11-14',
+    load: async () => (await import('./conad')).ConadProvider,
+  },
+
   // ── Hungary ──────────────────────────────────────────────────────────
   {
     id: 'tesco-hu',

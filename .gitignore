@@ -7,6 +7,10 @@ dist/
 *.session.json
 .sainsburys/
 .ocado/
+.conad/
+.venv-seleniumbase/
+__pycache__/
+*.py[cod]
 
 # Build artifacts
 *.js.map

@@ -25,6 +25,9 @@ jobs:
         with:
           node-version: ${{ matrix.node }}
           cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
       - run: npm ci
       - name: Typecheck
         run: npx tsc --noEmit
@@ -41,13 +44,18 @@ jobs:
         with:
           node-version: 20
           cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
       - run: npm ci
+      - run: npm run build
       # Catches the mistake that shipped once already: publishing src/ and
       # test/ to everyone because `files` was missing.
       - name: Check the published tarball contents
         run: |
           npm pack --silent > /dev/null
-          tar -tzf open-supermarkets-*.tgz | sed 's|^package/||' | cut -d/ -f1 | sort -u > /tmp/shipped
+          tar -tzf open-supermarkets-*.tgz > /tmp/package-entries
+          sed 's|^package/||' /tmp/package-entries | cut -d/ -f1 | sort -u > /tmp/shipped
           echo "Shipping:"; cat /tmp/shipped
           for unwanted in src test docs node_modules .github; do
             if grep -qx "$unwanted" /tmp/shipped; then
@@ -56,3 +64,30 @@ jobs:
             fi
           done
           test -s /tmp/shipped
+          for required in worker.py browser.py actions.py model.py requirements.txt; do
+            grep -qx "package/runtime/conad/$required" /tmp/package-entries
+          done
+          if grep -Eq '(__pycache__|\.pyc$|/Cookies$|/\.open-supermarkets-account\.json$)' /tmp/package-entries; then
+            echo "::error::Python caches or browser state would be published"
+            exit 1
+          fi
+          mkdir -p /tmp/conad-package
+          tar -xzf open-supermarkets-*.tgz -C /tmp/conad-package
+          cd /tmp
+          python3 /tmp/conad-package/package/runtime/conad/worker.py --help
+          test -f /tmp/conad-package/package/dist/cli.js
+          test -f /tmp/conad-package/package/dist/mcp-server.js
+          NODE_PATH="$GITHUB_WORKSPACE/node_modules" node /tmp/conad-package/package/dist/cli.js providers --country IT --json
+
+  conad-python:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ['3.10', '3.12', '3.13']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      # Standard library only: no Chrome, SeleniumBase, credentials or network.
+      - run: python3 test/conad_seleniumbase_unit.py

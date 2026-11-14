@@ -25,6 +25,11 @@ export interface ExplainOptions {
   action?: string;
 }
 
+/** A provider has a concrete continuation path for a browser challenge. */
+export class InteractionRequiredError extends Error {
+  readonly code: string = 'INTERACTION_REQUIRED';
+}
+
 function statusOf(err: any): number | undefined {
   return err?.response?.status ?? err?.status;
 }
@@ -74,6 +79,7 @@ export function explain(err: any, opts: ExplainOptions = {}): string {
   const status = statusOf(err);
   const who = opts.provider ? `${opts.provider}` : 'the provider';
   const what = opts.action ? ` while trying to ${opts.action}` : '';
+  if (err instanceof InteractionRequiredError) return raw;
 
   // Bot protection is checked FIRST. It arrives as prose rather than a status
   // code, and those strings are long enough to fool alreadyExplained() into

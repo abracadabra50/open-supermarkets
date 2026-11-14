@@ -45,6 +45,7 @@ export interface LeanProduct {
   unit?: string;
   /** null = the retailer did not say whether it is available. */
   inStock: boolean | null;
+  store?: Product['store'];
 }
 
 export function lean(p: Product): LeanProduct {
@@ -59,6 +60,7 @@ export function lean(p: Product): LeanProduct {
     size: p.size,
     unit,
     inStock: p.in_stock,
+    ...(p.store ? { store: p.store } : {}),
   };
 }
 
