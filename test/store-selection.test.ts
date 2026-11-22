@@ -1,9 +1,10 @@
 /**
  * The generic `stores` capability: store lookup plus store-scoped search.
  *
- * No real provider declares `stores` yet, so a fake store-scoped provider is
- * registered by temporarily giving one manifest the capability and a stub
- * loader. Every check runs offline; any retailer request fails the test.
+ * The capability is exercised through a fake store-scoped provider, registered
+ * by temporarily giving one search-only manifest the capability and a stub
+ * loader, so these checks hold whichever real providers declare `stores`.
+ * Every check runs offline; any retailer request fails the test.
  *
  * Run: npx tsx test/store-selection.test.ts
  */
@@ -157,8 +158,10 @@ async function main() {
       const stores = tools.find((t) => t.name === 'grocery_stores');
       assert.ok(stores, 'grocery_stores missing');
       const provider = (stores!.inputSchema as { properties: { provider: { enum: string[] } } }).properties.provider;
-      assert.deepEqual(provider.enum, [SCOPED]);
-      assert.deepEqual(eligibleProviders('grocery_stores'), [SCOPED]);
+      const expected = PROVIDERS.filter((p) => p.capabilities.includes('stores')).map((p) => p.id);
+      assert.ok(expected.includes(SCOPED));
+      assert.deepEqual(provider.enum, expected);
+      assert.deepEqual(eligibleProviders('grocery_stores'), expected);
       for (const name of ['grocery_search', 'grocery_search_batch']) {
         const tool = tools.find((t) => t.name === name)!;
         assert.ok((tool.inputSchema as { properties: Record<string, unknown> }).properties.store_id, name);
