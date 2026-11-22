@@ -11,6 +11,7 @@ import {
   type Need,
 } from './providers/registry';
 import type { FullGroceryProvider, SearchOptions } from './providers/types';
+import { STORES_NEED, parseStoreId, parseStoreSearch, searchNeeds } from './stores';
 
 type FavouritesProvider = FullGroceryProvider & {
   getFavourites?: (options?: SearchOptions) => Promise<unknown[]>;
@@ -43,6 +44,7 @@ function parsePositiveInt(value: string | null, name: string, defaultValue: numb
 /** What each route needs from a provider; eligibility comes from the manifest. */
 export const ROUTES: Record<string, Need> = {
   '/search': { capability: 'search' },
+  '/stores': STORES_NEED,
   '/add': { capability: 'basket' },
   '/remove': { capability: 'basket' },
   '/update': { capability: 'basket' },
@@ -58,10 +60,10 @@ export const ROUTES: Record<string, Need> = {
  * are a 400 and unsupported operations a 501, both before any provider code
  * loads. The login itself is left to the provider, as before.
  */
-async function getProvider(url: URL, need: Need): Promise<FullGroceryProvider> {
+async function getProvider(url: URL, needs: Need[]): Promise<FullGroceryProvider> {
   const providerName = url.searchParams.get('provider') || defaultProvider;
   try {
-    checkAccess(providerName, need);
+    for (const need of needs) checkAccess(providerName, need);
   } catch (err: any) {
     if (err instanceof UnknownProviderError) throw Object.assign(err, { statusCode: 400 });
     if (err instanceof MissingCapabilityError || err instanceof MissingExtraError) {
@@ -111,7 +113,8 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       ok: true,
       provider: url.searchParams.get('provider') || defaultProvider,
       endpoints: [
-        '/search?q=',
+        '/search?q=&store=',
+        '/stores?q=&postcode=&lat=&lng=&mode=',
         '/add?id=&qty=',
         '/remove?id=',
         '/update?id=&qty=',
@@ -124,13 +127,34 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
 
   const need = ROUTES[url.pathname];
   if (!need) return sendJson(res, 404, { error: 'Not found' });
-  const provider = await getProvider(url, need);
+  // Store input is validated, and a store-scoped search also checked for the
+  // `stores` capability, before provider code loads.
+  const storeId = url.pathname === '/search' ? parseStoreId(url.searchParams.get('store') ?? undefined) : undefined;
+  const storeOptions = url.pathname === '/stores'
+    ? parseStoreSearch({
+        query: url.searchParams.get('q') ?? undefined,
+        postcode: url.searchParams.get('postcode') ?? undefined,
+        latitude: url.searchParams.get('lat') ?? undefined,
+        longitude: url.searchParams.get('lng') ?? undefined,
+        mode: url.searchParams.get('mode') ?? undefined,
+        limit: url.searchParams.get('limit') ?? undefined,
+      })
+    : undefined;
+  const provider = await getProvider(url, searchNeeds(need, storeId));
 
   if (url.pathname === '/search') {
     const q = requireQuery(url, 'q');
     const limit = parsePositiveInt(url.searchParams.get('limit'), 'limit', 24);
-    const products = await provider.search(q, { limit });
-    return sendJson(res, 200, { products });
+    const products = await provider.search(q, { limit, storeId });
+    return sendJson(res, 200, storeId ? { store_id: storeId, products } : { products });
+  }
+
+  if (url.pathname === '/stores' && storeOptions) {
+    if (typeof provider.listStores !== 'function') {
+      return sendJson(res, 501, { error: `${provider.name} declares "stores" but does not implement listStores` });
+    }
+    const stores = (await provider.listStores(storeOptions)).slice(0, storeOptions.limit);
+    return sendJson(res, 200, { provider: provider.name, stores });
   }
 
   if (url.pathname === '/add') {

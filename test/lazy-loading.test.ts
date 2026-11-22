@@ -254,11 +254,17 @@ console.log('\nregistry/factory parity');
 
 {
   const { PROVIDERS, ProviderFactory } = require('../src/providers');
+  // Only the providers that predate the registry keep a synchronous
+  // constructor; anything added since is reached through createProvider().
+  const LEGACY_FACTORY_IDS = new Set([
+    'sainsburys', 'ocado', 'tesco', 'ah', 'ah-be', 'mercadona', 'ahorramas',
+    'tesco-hu', 'migros', 'kroger', 'instacart', 'instacart-web',
+  ]);
 
   check('existing manifest entries retain synchronous constructors', () => {
     const broken: string[] = [];
     for (const m of PROVIDERS) {
-      if (m.id === 'lidl-ie') continue; // search-only via async search routes
+      if (!LEGACY_FACTORY_IDS.has(m.id)) continue;
       try {
         ProviderFactory.create(m.id);
       } catch (err: any) {

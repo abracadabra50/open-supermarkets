@@ -39,8 +39,9 @@ Current capability meanings:
 - `slots`: read delivery-slot availability and, where implemented, select/book a slot.
 - `checkout`: progress to or place an order under the project's explicit confirmation boundary.
 - `orders`: read order history.
+- `stores`: read-only store lookup (`listStores()`), plus search scoped to one store through `SearchOptions.storeId`. A provider declaring `stores` must also declare `search`.
 
-A future shared capability such as store discovery must be introduced as a generic contract first, with tests, before provider-specific implementations depend on it.
+Any further shared capability must be introduced as a generic contract first, with tests, before provider-specific implementations depend on it.
 
 A provider must not declare a capability because the upstream retailer appears to expose a related endpoint. The Open Supermarkets method must be implemented and verified.
 
@@ -70,7 +71,7 @@ The same applies to basket lines: `unit_price`, `total_price` and `total_cost` a
 
 Loyalty/member pricing must not replace regular retail pricing unless the shared contract explicitly represents the distinction. If both are later supported, they need separate fields with explicit semantics.
 
-Store-scoped pricing must not be represented as national pricing. The provider must either require/select the appropriate store context or expose the limitation.
+Store-scoped pricing must not be represented as national pricing. The provider must either require/select the appropriate store context or expose the limitation. With the `stores` capability, the store context is `SearchOptions.storeId`: a provider that cannot price without a store throws an actionable error when none is given, and rejects an unknown store id rather than silently falling back to a default store. The CLI, HTTP and MCP responses carry the store id alongside the products.
 
 ### Availability
 

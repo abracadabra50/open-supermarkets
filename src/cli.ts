@@ -14,6 +14,7 @@ import {
 import type { Capability, FullGroceryProvider } from './providers/types';
 import { money, byPrice, cheapest, dealCandidates, stockLabel } from './format';
 import { explain } from './errors';
+import { STORES_NEED, parseStoreId, parseStoreSearch, searchNeeds } from './stores';
 // Tesco is imported as a *type only* — a value import here would pull Playwright
 // into every `groc` invocation, including `groc providers` in another country.
 import type { TescoProvider } from './providers/tesco/index';
@@ -177,23 +178,29 @@ program
   .option('-c, --country <code>', 'Country to shop in (ISO 3166-1 alpha-2)')
   .option('--enrich', 'Add Nutri-Score, NOVA and allergens from Open Food Facts')
   .option('--batch <file>', 'Run many queries at once. JSON array, or - for stdin')
+  .option('-s, --store <id>', 'Store id from `supermarket stores`, for store-scoped providers')
   .option('--json', 'Output as JSON')
   .action(async (query, options, cmd) => {
     try {
       const limit = parsePositiveInt(options.limit, 'limit');
       const globals = cmd.optsWithGlobals();
+      const storeId = parseStoreId(options.store);
 
       // `--country` picks the first search-capable provider there, unless a
       // provider was named explicitly. This is what makes `search --country NL`
       // work without the user knowing which chains exist in the Netherlands.
-      let provider;
+      let providerId: string = globals.provider;
       if (options.country && !cmd.args.includes('--provider')) {
         const country = resolveCountry(options.country);
         const [first] = providersFor(country, 'search');
-        provider = await createProvider(first.id);
-      } else {
-        provider = await createProvider(globals.provider);
+        providerId = first.id;
       }
+      // A store id is only honoured by store-scoped providers; refuse it for
+      // the rest before any provider code loads.
+      if (storeId !== undefined) {
+        for (const need of searchNeeds({ capability: 'search' }, storeId)) checkAccess(providerId, need);
+      }
+      const provider = await createProvider(providerId);
 
       // Batch mode: thirty queries in one invocation instead of thirty.
       if (options.batch) {
@@ -208,10 +215,10 @@ program
                 'utf-8'
               );
         const queries = parseBatchInput(raw);
-        const results = await batchSearch(provider, queries, { limit });
+        const results = await batchSearch(provider, queries, { limit, storeId });
 
         if (options.json !== false) {
-          console.log(JSON.stringify({ provider: provider.name, results }, null, 2));
+          console.log(JSON.stringify({ provider: provider.name, ...(storeId ? { store_id: storeId } : {}), results }, null, 2));
           return;
         }
         for (const r of results) {
@@ -224,7 +231,7 @@ program
         return;
       }
 
-      let products: any[] = await provider.search(query, { limit });
+      let products: any[] = await provider.search(query, { limit, storeId });
 
       if (options.enrich) {
         const { enrich } = await import('./enrich/openfoodfacts');
@@ -232,11 +239,12 @@ program
       }
 
       if (options.json) {
-        console.log(JSON.stringify({ products }, null, 2));
+        console.log(JSON.stringify(storeId ? { store_id: storeId, products } : { products }, null, 2));
         return;
       }
 
-      console.log(`\n🔍 Search results from ${provider.name}: "${query}"\n`);
+      const at = storeId ? ` (store ${storeId})` : '';
+      console.log(`\n🔍 Search results from ${provider.name}${at}: "${query}"\n`);
       printProducts(products);
 
       if (options.enrich) {
@@ -764,7 +772,7 @@ program
       return;
     }
 
-    const CAPS: Capability[] = ['search', 'basket', 'slots', 'checkout', 'orders'];
+    const CAPS: Capability[] = ['search', 'stores', 'basket', 'slots', 'checkout', 'orders'];
     const width = Math.max(...manifests.map((m) => m.label.length), 8);
 
     console.log(
@@ -863,6 +871,54 @@ program
       }
     } catch (error: any) {
       console.error('❌ Session import failed:', explain(error, { provider: cmd?.optsWithGlobals?.().provider ?? program.opts().provider, action: 'session import' }));
+      process.exit(1);
+    }
+  });
+
+// Stores: find a store id for store-scoped providers (prices and stock are per store)
+program
+  .command('stores')
+  .description('Find stores for a store-scoped provider; pass a store id to `search --store`')
+  .option('-q, --query <text>', 'Town or store name, where the retailer supports text search')
+  .option('--postcode <code>', 'Postcode / Eircode / ZIP filter, where supported')
+  .option('--lat <number>', 'Latitude (with --lng)')
+  .option('--lng <number>', 'Longitude (with --lat)')
+  .option('--mode <mode>', 'Fulfilment mode, e.g. delivery or pickup, where supported')
+  .option('-l, --limit <number>', 'Max stores', '10')
+  .option('--json', 'Output as JSON')
+  .action(async (options, cmd) => {
+    try {
+      const storeOptions = parseStoreSearch({
+        query: options.query,
+        postcode: options.postcode,
+        latitude: options.lat,
+        longitude: options.lng,
+        mode: options.mode,
+        limit: options.limit,
+      });
+      const provider = await getProvider(cmd.optsWithGlobals(), STORES_NEED);
+      if (typeof provider.listStores !== 'function') {
+        throw new Error(`${provider.name} declares "stores" but does not implement listStores.`);
+      }
+      const stores = (await provider.listStores(storeOptions)).slice(0, storeOptions.limit);
+      if (options.json) {
+        console.log(JSON.stringify({ provider: provider.name, stores }, null, 2));
+        return;
+      }
+      if (stores.length === 0) {
+        console.log(`\nNo ${provider.name} stores matched.\n`);
+        return;
+      }
+      console.log(`\n🏬 ${provider.name} stores\n`);
+      for (const s of stores) {
+        const where = [s.address, s.postcode].filter(Boolean).join(', ');
+        const modes = s.modes?.length ? ` [${s.modes.join(', ')}]` : '';
+        console.log(`  ${s.store_id}  ${s.name}${modes}`);
+        if (where) console.log(`  ${' '.repeat(s.store_id.length)}  ${where}`);
+      }
+      console.log(`\nSearch one with: supermarket --provider ${provider.name} search <query> --store <id>\n`);
+    } catch (error: any) {
+      console.error('❌ Store lookup failed:', explain(error, { provider: cmd?.optsWithGlobals?.().provider ?? program.opts().provider, action: 'find stores' }));
       process.exit(1);
     }
   });

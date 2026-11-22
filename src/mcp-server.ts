@@ -22,6 +22,7 @@ import {
   isAccessError,
 } from './providers/registry.js';
 import { TOOL_ROUTES, eligibleProviders } from './mcp-routes.js';
+import { StoreInputError, parseStoreId, parseStoreSearch, searchNeeds } from './stores.js';
 import type { FullGroceryProvider } from './providers/types.js';
 import { money, stockLabel, cheapest } from './format.js';
 import { explain } from './errors.js';
@@ -76,6 +77,12 @@ const amendProp = {
 
 // The enum is filled per tool from TOOL_ROUTES when tools are listed.
 const providerEnum = { type: 'string', description: 'Provider id (see grocery_providers)' };
+const storeIdProperty = {
+  type: 'string',
+  description:
+    'Store id from grocery_stores, for providers whose prices and stock are per store. ' +
+    'Refused for providers that are not store-scoped.',
+};
 
 function withProviderEnum<T extends { name: string; inputSchema: any }>(tool: T): T {
   const prop = tool.inputSchema?.properties?.provider;
@@ -119,6 +126,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             provider: { ...providerEnum, default: 'sainsburys' },
             query: { type: 'string', description: 'Search term (e.g., "milk", "organic eggs", "chicken breast")' },
             limit: { type: 'integer', minimum: 1, maximum: 100, description: 'Maximum results to return (default: 10, maximum: 100)', default: 10 },
+            store_id: storeIdProperty,
           },
           required: ['query'],
         },
@@ -152,8 +160,28 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
               description: 'Product queries, e.g. ["semi skimmed milk","free range eggs"]',
             },
             limit: { type: 'integer', minimum: 1, maximum: 100, description: 'Candidates per query (default: 5, maximum: 100)', default: 5 },
+            store_id: storeIdProperty,
           },
           required: ['queries'],
+        },
+      },
+      {
+        name: 'grocery_stores',
+        description:
+          'Find stores for a store-scoped provider, whose prices and stock depend on the store. ' +
+          'Pass a returned store_id to grocery_search or grocery_search_batch.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            provider: providerEnum,
+            query: { type: 'string', description: 'Town or store name, where the retailer supports text search' },
+            postcode: { type: 'string', description: 'Postcode / Eircode / ZIP filter, where supported' },
+            latitude: { type: 'number', minimum: -90, maximum: 90 },
+            longitude: { type: 'number', minimum: -180, maximum: 180 },
+            mode: { type: 'string', description: 'Fulfilment mode, e.g. "delivery" or "pickup", where the retailer distinguishes them' },
+            limit: { type: 'integer', minimum: 1, maximum: 100, description: 'Maximum stores (default: 10)', default: 10 },
+          },
+          required: ['provider'],
         },
       },
       {
@@ -370,7 +398,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         description: 'List all available supermarket providers and their login status.',
         inputSchema: { type: 'object', properties: {} },
       },
-    ]).map(withProviderEnum),
+    ])
+      .map(withProviderEnum)
+      // A routed tool no registered provider can serve is not advertised:
+      // an empty provider enum is a tool nobody can call.
+      .filter((tool) => !TOOL_ROUTES[tool.name] || eligibleProviders(tool.name).length > 0),
   };
 });
 
@@ -383,14 +415,21 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   try {
     // Every check that can fail without the retailer runs here, from the
     // manifest, before provider code loads: unknown id, missing capability,
-    // missing extra, missing stored login.
+    // missing extra, missing stored login, and a store id for a provider
+    // that is not store-scoped.
     const route = TOOL_ROUTES[name];
     const target = route?.fixed ?? providerName;
+    let storeId: string | undefined;
     if (route) {
       try {
-        checkAccess(target, route.need, { session: true });
+        storeId = route.storeScoped ? parseStoreId(args.store_id) : undefined;
+        for (const need of searchNeeds(route.need, storeId)) {
+          checkAccess(target, need, { session: true });
+        }
       } catch (err) {
-        if (isAccessError(err)) return textResult((err as Error).message, true);
+        if (isAccessError(err) || err instanceof StoreInputError) {
+          return textResult((err as Error).message, true);
+        }
         throw err;
       }
     }
@@ -430,8 +469,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       if (!queries.length) return textResult('Give me at least one query.', true);
       const { batchSearch } = await import('./batch.js');
       const provider = await getProvider();
-      const results = await batchSearch(provider, queries, { limit });
-      return textResult(JSON.stringify({ provider: providerName, results }, null, 2));
+      const results = await batchSearch(provider, queries, { limit, storeId });
+      return textResult(JSON.stringify({ provider: providerName, ...(storeId ? { store_id: storeId } : {}), results }, null, 2));
     }
 
     if (name === 'grocery_basket_add_batch') {
@@ -471,7 +510,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const { query } = args as { query: string };
       const limit = searchLimit(args.limit, 10);
       const provider = await getProvider();
-      const results = await provider.search(query, { limit });
+      const results = await provider.search(query, { limit, storeId });
       const limited = results.slice(0, limit);
 
       const formatted = limited.map((p, i) => {
@@ -481,8 +520,19 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }).join('\n\n');
 
       return textResult(
-        `Found ${results.length} products at ${providerName} (showing ${limited.length}):\n\n${formatted}`
+        `Found ${results.length} products at ${providerName}${storeId ? ` store ${storeId}` : ''} (showing ${limited.length}):\n\n${formatted}`
       );
+    }
+
+    // ── grocery_stores ──
+    if (name === 'grocery_stores') {
+      const options = parseStoreSearch(args);
+      const provider = await getProvider();
+      if (typeof provider.listStores !== 'function') {
+        return textResult(`${target} declares "stores" but does not implement listStores.`, true);
+      }
+      const stores = (await provider.listStores(options)).slice(0, options.limit);
+      return textResult(JSON.stringify({ provider: target, stores }, null, 2));
     }
 
     // ── grocery_favourites ──
@@ -743,6 +793,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   } catch (error: any) {
     // Agents act on error text, so a bare "status code 401" makes them retry
     // forever instead of telling the user to log in.
+    if (error instanceof StoreInputError) return textResult(error.message, true);
     return textResult(`Error: ${explain(error, { provider: providerName })}`, true);
   }
 });
