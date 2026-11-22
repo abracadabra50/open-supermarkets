@@ -115,6 +115,42 @@ export interface SearchOptions {
   limit?: number;
   offset?: number;
   category?: string;
+  /**
+   * Retailer store id that scopes prices and availability for this one search.
+   * Only providers declaring the `stores` capability receive it: every
+   * interface refuses a store id for any other provider before provider code
+   * loads. A store-scoped provider that cannot price without a store must
+   * throw rather than silently fall back to another store's prices.
+   */
+  storeId?: string;
+}
+
+/** A retailer store that scopes catalogue pricing and availability. */
+export interface Store {
+  /** Retailer-owned id, the value search accepts as `storeId`. */
+  store_id: string;
+  name: string;
+  address?: string;
+  postcode?: string;
+  location?: { latitude: number; longitude: number };
+  /** Lowercase fulfilment modes the retailer states, e.g. `delivery`, `pickup`, `walk-in`. */
+  modes?: string[];
+}
+
+/**
+ * Filters for a read-only store lookup. Providers reject filters their
+ * retailer cannot apply rather than ignoring them.
+ */
+export interface StoreSearchOptions {
+  /** Free-text store search (town, store name). */
+  query?: string;
+  postcode?: string;
+  /** Both or neither. */
+  latitude?: number;
+  longitude?: number;
+  /** Fulfilment mode to filter by, when the retailer distinguishes them. */
+  mode?: string;
+  limit?: number;
 }
 
 /**
@@ -130,7 +166,8 @@ export type Capability =
   | 'basket'    // add/remove/read a basket. Needs an account.
   | 'slots'     // delivery slot availability. Needs an account.
   | 'checkout'  // place a real order. Needs account + address + payment.
-  | 'orders';   // order history. Needs an account.
+  | 'orders'    // order history. Needs an account.
+  | 'stores';   // store lookup, and search scoped to a store via SearchOptions.storeId.
 
 /** How you authenticate. Ordered roughly by how painful it is to automate. */
 export type AuthModel =
@@ -207,6 +244,9 @@ export interface GroceryProvider {
   getProduct?(productId: string): Promise<Product>;
   getCategories?(): Promise<any>;
 
+  // ── stores ───────────────────────────────────────────────────────────
+  listStores?(options?: StoreSearchOptions): Promise<Store[]>;
+
   // ── auth ─────────────────────────────────────────────────────────────
   login?(email: string, password: string): Promise<void>;
   logout?(): Promise<void>;
@@ -243,5 +283,5 @@ export interface GroceryProvider {
  * `assertCapability()`, which is honest about the fact that most providers in
  * the world do not do checkout.
  */
-export type FullGroceryProvider = Required<Omit<GroceryProvider, 'allowOrderAmend'>> &
-  Pick<GroceryProvider, 'allowOrderAmend'>;
+export type FullGroceryProvider = Required<Omit<GroceryProvider, 'allowOrderAmend' | 'listStores'>> &
+  Pick<GroceryProvider, 'allowOrderAmend' | 'listStores'>;

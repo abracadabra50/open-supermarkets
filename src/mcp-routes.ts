@@ -12,14 +12,18 @@ import { PROVIDERS, supportsExtra, type Need } from './providers/registry';
  * manifest entry, not an edit here.
  *
  * `fixed` tools always act on one provider, whatever `provider` says.
+ * `storeScoped` tools accept an optional `store_id`; giving one adds the
+ * `stores` need, so a provider without it is refused rather than answering
+ * with prices for some other store.
  * Tools missing from the table (status, providers, compare) are global.
  */
-export type Route = { need: Need; fixed?: string };
+export type Route = { need: Need; fixed?: string; storeScoped?: boolean };
 
 export const TOOL_ROUTES: Record<string, Route> = {
   grocery_login: { need: { capability: 'search', extra: 'login' } },
-  grocery_search: { need: { capability: 'search' } },
-  grocery_search_batch: { need: { capability: 'search' } },
+  grocery_search: { need: { capability: 'search' }, storeScoped: true },
+  grocery_search_batch: { need: { capability: 'search' }, storeScoped: true },
+  grocery_stores: { need: { capability: 'stores' } },
   grocery_favourites: { need: { capability: 'search', extra: 'favourites' } },
   grocery_favourites_search: { need: { capability: 'search', extra: 'favourites' } },
   grocery_categories: { need: { capability: 'search', extra: 'categories' } },

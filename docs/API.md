@@ -39,6 +39,7 @@ interface GroceryProvider {
   search(query: string, options?: SearchOptions): Promise<Product[]>;
   getProduct?(productId: string): Promise<Product>;
   getCategories?(): Promise<unknown>;
+  listStores?(options?: StoreSearchOptions): Promise<Store[]>;
 
   login?(email: string, password: string): Promise<void>;
   logout?(): Promise<void>;
@@ -124,6 +125,27 @@ const products = await provider.search('milk', {
 ```
 
 Search semantics vary upstream, but the common contract requires providers to surface real upstream errors instead of returning an empty list for authentication failures, WAF blocks or malformed responses.
+
+## Stores
+
+Some retailers price and stock per store. Providers that declare the `stores` capability implement `listStores()` and honour `SearchOptions.storeId`:
+
+```ts
+assertCapability(id, 'stores');
+const provider = await createProvider(id);
+const [store] = await provider.listStores!({ postcode: 'D01', limit: 5 });
+const products = await provider.search('milk', { storeId: store.store_id });
+```
+
+The contract is stateless: nothing is remembered between calls, so each search names its store. Every interface refuses a store id for a provider without `stores` before provider code loads, rather than returning prices for some other store.
+
+| Surface | Store lookup | Store-scoped search |
+| --- | --- | --- |
+| CLI | `supermarket --provider <id> stores [--query] [--postcode] [--lat --lng] [--mode] [--limit]` | `supermarket --provider <id> search <q> --store <store_id>` |
+| HTTP | `GET /stores?provider=&q=&postcode=&lat=&lng=&mode=&limit=` | `GET /search?provider=&q=&store=` |
+| MCP | `grocery_stores` | `store_id` on `grocery_search` / `grocery_search_batch` |
+
+Store lookup needs a stored login exactly when search does. `grocery_stores` is only listed while at least one registered provider declares `stores`.
 
 ## Basket
 

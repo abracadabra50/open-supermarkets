@@ -158,8 +158,10 @@ async function main() {
       for (const t of tools) {
         assert.ok(TOOL_ROUTES[t.name] || GLOBAL_TOOLS.has(t.name), `${t.name} has no route`);
       }
+      // A routed tool is listed exactly when some provider can serve it.
       for (const name of Object.keys(TOOL_ROUTES)) {
-        assert.ok(tools.some((t) => t.name === name), `route for missing tool ${name}`);
+        const listed = tools.some((t) => t.name === name);
+        assert.equal(listed, eligibleProviders(name).length > 0, `${name}: listed=${listed}`);
       }
     });
 

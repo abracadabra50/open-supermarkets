@@ -339,7 +339,9 @@ export function needsSession(id: string, need: Need): boolean {
   if (!m.session) return false;
   if (need.extra === 'login') return false;
   if (need.extra && ACCOUNT_EXTRAS.has(need.extra)) return true;
-  return need.capability === 'search' ? m.searchNeedsSession === true : true;
+  // Store lookup is catalogue context, so it needs a login exactly when search does.
+  const catalogue = need.capability === 'search' || need.capability === 'stores';
+  return catalogue ? m.searchNeedsSession === true : true;
 }
 
 /**
